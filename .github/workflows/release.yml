@@ -36,6 +36,10 @@ jobs:
             args: --target x86_64-apple-darwin
 
     runs-on: ${{ matrix.platform }}
+    env:
+      # 시크릿 자체를 step-level if 에 직접 쓸 수 없는 경우가 있어,
+      # job-level 에서 한 번 boolean 으로 변환해 둔다.
+      HAS_APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -90,7 +94,7 @@ jobs:
       # 부재 시엔 아예 변수 자체가 없어야 한다 (그러면 tauri.conf.json 의
       # signingIdentity "-" 가 적용되어 ad-hoc 서명으로 통과).
       - name: Set Apple signing env (시크릿 등록된 경우만)
-        if: ${{ secrets.APPLE_CERTIFICATE != '' }}
+        if: env.HAS_APPLE_CERT == 'true'
         env:
           A_CERT: ${{ secrets.APPLE_CERTIFICATE }}
           A_PWD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
