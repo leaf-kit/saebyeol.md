@@ -84,23 +84,37 @@ jobs:
             echo "RELEASE_BODY_EOF"
           } >> "$GITHUB_OUTPUT"
 
+      # Apple Developer ID 시크릿이 등록된 경우에만 APPLE_* env 를
+      # $GITHUB_ENV 에 주입한다. 빈 시크릿이 그대로 env 로 흘러가면
+      # tauri-action 이 빈 PKCS12 import 를 시도하다 실패하므로, 시크릿
+      # 부재 시엔 아예 변수 자체가 없어야 한다 (그러면 tauri.conf.json 의
+      # signingIdentity "-" 가 적용되어 ad-hoc 서명으로 통과).
+      - name: Set Apple signing env (시크릿 등록된 경우만)
+        if: ${{ secrets.APPLE_CERTIFICATE != '' }}
+        env:
+          A_CERT: ${{ secrets.APPLE_CERTIFICATE }}
+          A_PWD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          A_ID: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          A_USR: ${{ secrets.APPLE_ID }}
+          A_APP_PWD: ${{ secrets.APPLE_PASSWORD }}
+          A_TID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          {
+            printf 'APPLE_CERTIFICATE<<APPLE_CERT_EOF\n%s\nAPPLE_CERT_EOF\n' "$A_CERT"
+            echo "APPLE_CERTIFICATE_PASSWORD=$A_PWD"
+            echo "APPLE_SIGNING_IDENTITY=$A_ID"
+            echo "APPLE_ID=$A_USR"
+            echo "APPLE_PASSWORD=$A_APP_PWD"
+            echo "APPLE_TEAM_ID=$A_TID"
+          } >> "$GITHUB_ENV"
+
       - name: Build & release with tauri-action
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # 아래 Apple 시크릿이 모두 등록되어 있어야 코드사이닝과
-          # 노터리제이션이 통과한다. APPLE_SIGNING_IDENTITY 시크릿 값이
-          # tauri.conf.json 의 signingIdentity ("-") 를 런타임에 override.
-          # 시크릿이 비어 있으면 tauri-action 이 빈 PKCS12 import 를
-          # 시도하다 실패하므로, 등록 전에는 이 블록을 주석 처리할 것.
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           projectPath: apps/ime-app/src-tauri
           tagName: ${{ github.ref_name }}
