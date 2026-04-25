@@ -1,0 +1,19 @@
+[package]
+name = "ime-demo"
+description = "Interactive terminal demo for the 새별 마크다운 에디터 (sbmd) input engine."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+lib-ime = { path = "../lib-ime" }
+crossterm = "0.28"
+
+[[bin]]
+name = "ime-demo"
+path = "src/main.rs"

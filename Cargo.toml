@@ -1,0 +1,24 @@
+[workspace]
+resolver = "2"
+members = ["apps/ime-app/src-tauri", "crates/ime-demo", "crates/lib-ime"]
+
+[workspace.package]
+version = "0.1.1"
+edition = "2021"
+rust-version = "1.75"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/leaf/leaf-ime"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

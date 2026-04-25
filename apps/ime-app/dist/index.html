@@ -1,0 +1,842 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>새별 마크다운 에디터</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+
+    <!-- 상단 제목표시줄 — traffic-light(빨·노·초) 버튼이 얹히는 띠 +
+         현재 활성 탭 제목 표시. 가운데 텍스트는 창 드래그에는 영향 없도록
+         `pointer-events: none` 처리되지만 요소 자체는 drag region 상속. -->
+    <div id="app-titlebar" class="app-titlebar" data-tauri-drag-region>
+      <span id="app-titlebar-title" class="app-titlebar-title" aria-live="polite"></span>
+    </div>
+
+    <div id="settings-modal" class="settings-modal hidden" role="dialog"
+         aria-modal="true" aria-labelledby="settings-title">
+      <div class="settings-backdrop"></div>
+      <div class="settings-panel">
+        <header class="settings-head">
+          <h2 id="settings-title">설정</h2>
+          <button id="settings-close" class="settings-close" aria-label="닫기">×</button>
+        </header>
+        <div class="settings-body">
+
+          <section class="settings-section">
+            <h3>자판</h3>
+            <div class="setting-row">
+              <label for="layout-select" class="setting-label">
+                <span class="setting-name">한글 자판</span>
+                <span class="setting-hint">OS IME 를 선택하면 새별 마크다운 에디터가 키 입력을 가로채지 않고 시스템 IME 에 맡깁니다.</span>
+              </label>
+              <select id="layout-select">
+                <option value="dubeolsik-std">두벌식 표준</option>
+                <option value="sebeolsik-390">세벌식 390</option>
+                <option value="sebeolsik-final">세벌식 최종</option>
+                <option value="os-ime">OS IME (시스템)</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <label for="latin-select" class="setting-label">
+                <span class="setting-name">영문 자판</span>
+                <span class="setting-hint">Dvorak 선택 시 물리 키 위치가 Dvorak 배치로 매핑됩니다.</span>
+              </label>
+              <select id="latin-select">
+                <option value="qwerty-us">QWERTY</option>
+                <option value="dvorak">Dvorak</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <label for="bs-mode-select" class="setting-label">
+                <span class="setting-name">지움 단위</span>
+                <span class="setting-hint">Backspace 한 번에 삭제할 단위.</span>
+              </label>
+              <select id="bs-mode-select">
+                <option value="syllable">음절</option>
+                <option value="jamo">자모</option>
+              </select>
+            </div>
+            <div class="setting-row toggle-row">
+              <label id="mode-label" class="mode-label">
+                <span class="setting-name">모아치기</span>
+                <span class="setting-hint">세벌식에서 초·중·종 키를 순서에 관계없이 쳐도 한 음절로 모아 조합합니다.</span>
+              </label>
+              <input type="checkbox" id="moachigi-toggle" class="switch" />
+            </div>
+            <div class="setting-row toggle-row">
+              <label id="typo-correct-label" class="mode-label">
+                <span class="setting-name">오탈자 교정</span>
+                <span class="setting-hint">
+                  타이핑 중 흔히 남는 군더더기를 자동으로 정돈합니다.<br/>
+                  • 완성된 음절 바로 앞의 홀자모(초·중·종)를 오타로 판단해 제거 — 예: <code>ㅎ하</code> → <code>하</code><br/>
+                  • <strong>줄바꿈 직전의 공백·탭</strong>을 자동 제거 — 예: <code>검토 부탁드립니다. ⏎</code> → <code>검토 부탁드립니다.⏎</code>
+                </span>
+              </label>
+              <input type="checkbox" id="typo-correct-toggle" class="switch" checked />
+            </div>
+          </section>
+
+          <section class="settings-section">
+            <h3>표시</h3>
+            <div class="setting-row">
+              <label for="form-select" class="setting-label">
+                <span class="setting-name">출력 형식</span>
+                <span class="setting-hint">조합 결과의 유니코드 표현.</span>
+              </label>
+              <select id="form-select">
+                <option value="nfc">NFC 음절</option>
+                <option value="conjoining">조합용 자모</option>
+                <option value="compat">호환 자모</option>
+              </select>
+            </div>
+            <div class="setting-row toggle-row">
+              <label id="abbr-label" class="mode-label">
+                <span class="setting-name">자동완성 팝업</span>
+                <span class="setting-hint">약어 추천 팝업을 켜거나 끕니다. ChoSeq 자동 확장은 계속 동작.</span>
+              </label>
+              <input type="checkbox" id="abbr-toggle" class="switch" checked />
+            </div>
+            <div class="setting-row toggle-row">
+              <label id="md-label" class="mode-label md-mode-label">
+                <span class="setting-name">마크다운 WYSIWYG</span>
+                <span class="setting-hint">실시간 마크다운 렌더 + 포매팅 단축키 (⌘ B · I · 1..6 · L · Q 등).</span>
+              </label>
+              <input type="checkbox" id="md-toggle" class="switch" checked />
+            </div>
+            <div class="setting-row">
+              <label for="theme-select" class="setting-label">
+                <span class="setting-name">테마</span>
+                <span class="setting-hint">전체 인터페이스의 색 테마. 선택은 저장되어 다음 실행에도 유지됩니다.</span>
+              </label>
+              <select id="theme-select">
+                <optgroup label="다크">
+                  <option value="graphite">Graphite · 무채색 다크</option>
+                  <option value="midnight">Midnight · Nord</option>
+                  <option value="rosepine">Rose Pine · 파스텔 다크</option>
+                  <option value="dracula">Dracula · 퍼플 액센트</option>
+                  <option value="tokyonight">Tokyo Night · 모던 블루</option>
+                  <option value="solarized-dark">Solarized Dark · 클래식</option>
+                </optgroup>
+                <optgroup label="라이트">
+                  <option value="moss">Moss · 따뜻한 페이퍼</option>
+                  <option value="sepia">Sepia · 리딩 페이퍼</option>
+                  <option value="latte">Latte · Catppuccin</option>
+                  <option value="slate">Slate · Material</option>
+                  <option value="arctic">Arctic · 클린 화이트</option>
+                  <option value="solarized-light">Solarized Light · 웜 페이퍼</option>
+                  <option value="github-light">GitHub Light · 클린 라이트</option>
+                </optgroup>
+              </select>
+            </div>
+            <div class="setting-row">
+              <label for="editor-width" class="setting-label">
+                <span class="setting-name">에디터 폭</span>
+                <span class="setting-hint">본문 컨텐츠의 최대 너비. 화면이 넓을 때 가독성에 영향을 줍니다.</span>
+              </label>
+              <select id="editor-width">
+                <option value="600">좁게 · 600px</option>
+                <option value="760" selected>보통 · 760px</option>
+                <option value="880">넓게 · 880px</option>
+                <option value="1040">아주 넓게 · 1040px</option>
+                <option value="none">전체 폭</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <label for="editor-border" class="setting-label">
+                <span class="setting-name">에디터 테두리</span>
+                <span class="setting-hint">편집 영역의 시각적 구분. 기본은 바깥 배경과 같은 색의 플랫 스타일.</span>
+              </label>
+              <select id="editor-border">
+                <option value="none" selected>없음 · 플랫</option>
+                <option value="hairline">얇은 선</option>
+                <option value="paper">종이 · 드롭섀도</option>
+              </select>
+            </div>
+          </section>
+
+        </div>
+      </div>
+    </div>
+
+    <div id="help-modal" class="help-modal hidden" role="dialog" aria-modal="true"
+         aria-labelledby="help-title">
+      <div class="help-backdrop"></div>
+      <div class="help-panel">
+        <header class="help-head">
+          <h2 id="help-title">새별 마크다운 에디터 도움말</h2>
+          <button id="help-close" class="help-close" aria-label="닫기">×</button>
+        </header>
+        <div class="help-body">
+
+          <section>
+            <h3>🌐 언어 전환 (Language Toggle)</h3>
+            <p>
+              <b>Caps Lock</b> · <b>Shift + Space</b> · 헤더 왼쪽의
+              <b>한/EN 버튼</b> 셋 중 어느 것으로도 한글 자판 ↔ 영문 자판
+              을 전환할 수 있습니다. Caps Lock 은 macOS 시스템 한글 IME 의
+              관례를 따른 매핑입니다. 전환 시점에 조합 중이던 음절은
+              자동 확정됩니다.
+            </p>
+            <dl>
+              <dt>한글 (기본값)</dt>
+              <dd>
+                선택된 한글 자판(두벌식/세벌식 등)을 거쳐 Hangul FSM 이
+                동작합니다.
+              </dd>
+              <dt>영문</dt>
+              <dd>
+                기본은 <b>QWERTY (US)</b>. 헤더의 "영문" 드롭다운에서
+                <b>Dvorak</b> 을 고르면 물리 키 위치가 Dvorak 배치로
+                매핑됩니다. OS 레벨 자판 설정과 무관하게 동일하게 동작합니다.
+              </dd>
+            </dl>
+          </section>
+
+          <section>
+            <h3>🖮 레이아웃 (Layout)</h3>
+            <dl>
+              <dt>두벌식 표준</dt>
+              <dd>
+                국가 표준(KS X 5002) 두벌 자판. 초성과 종성을 같은 물리 키로
+                공유하므로 자모의 역할은 순서(앞뒤 맥락)에 따라 결정됩니다.
+                대부분의 한국 사용자가 익숙한 기본값.
+              </dd>
+              <dt>세벌식 390 (3-90)</dt>
+              <dd>
+                1990년 공병우 박사가 정리한 3-set 자판. 왼쪽은 받침(끝소리),
+                가운데는 모음(가운뎃소리), 오른쪽은 초성(첫소리)으로 완전히
+                분리되어 있어 손가락 이동이 줄어듭니다.
+                <small>libhangul 공식 매핑 사용.</small>
+              </dd>
+              <dt>세벌식 최종 (3-91)</dt>
+              <dd>
+                1991년 공병우 최종안. 3-90의 구조를 그대로 계승하면서
+                Shift 레이어에 <b>겹받침 단축키</b>(ᆰ ᆱ ᆲ ᆳ ᆹ ᆪ ᆭ ᆶ ᇁ ᇀ …)를
+                추가해 긴 어미·받침 입력을 빠르게 합니다.
+              </dd>
+            </dl>
+          </section>
+
+          <section>
+            <h3>📝 출력 형식 (Output Form)</h3>
+            <dl>
+              <dt>NFC 음절</dt>
+              <dd>
+                U+AC00–U+D7A3 범위의 <b>완성형 한글 음절</b>로 출력합니다.
+                예: "가" (U+AC00). 대부분의 앱과 파일 포맷이 기대하는 형식.
+              </dd>
+              <dt>조합용 자모 (Conjoining Jamo)</dt>
+              <dd>
+                U+1100–U+11FF 범위의 초/중/종 <b>자모를 분리</b>해서 유지합니다.
+                텍스트 레이아웃 엔진이 자모 단위로 셰이핑하는 경우에 유용.
+              </dd>
+              <dt>호환 자모 (Compatibility Jamo)</dt>
+              <dd>
+                U+3130–U+318F 범위의 <b>독립 자모 글리프</b>. ㄱ/ㅎ/ㅏ 처럼
+                혼자 쓰이는 자모를 또렷하게 표시할 때 사용.
+              </dd>
+            </dl>
+          </section>
+
+          <section>
+            <h3>🔀 모아치기 (Moachigi)</h3>
+            <p>
+              세벌식 자판에서 초성·중성·종성 키가 역할별로 분리되어 있는 점을
+              활용해, 한 음절 안에서는 <b>아무 순서로 쳐도</b> 같은 음절로
+              조합하는 입력 방식입니다. 예를 들어 "국"을 만들 때
+              <code>k b x</code>(정순), <code>x b k</code>(역순),
+              <code>b k x</code>(혼합) 어느 쪽으로 쳐도 동일하게 "국"이 됩니다.
+            </p>
+            <p class="muted">
+              두벌식은 자음 키가 초/종을 겸하므로 모아치기를 적용할 수 없습니다.
+              세벌식 선택 시 자동으로 켜집니다.
+            </p>
+          </section>
+
+          <section>
+            <h3>🧩 용어 풀이 (Glossary)</h3>
+            <dl>
+              <dt>초성 · 중성 · 종성</dt>
+              <dd>
+                한글 한 음절을 이루는 세 자리:
+                <b>초성</b>(첫소리, 자음), <b>중성</b>(가운뎃소리, 모음),
+                <b>종성</b>(끝소리, 받침). 영어로는 Cho / Jung / Jong.
+              </dd>
+              <dt>Preedit (조합 중)</dt>
+              <dd>
+                아직 확정되지 않은, 조합 중인 자모의 임시 표시.
+                에디터에서 <span class="preedit-demo">노란색 밑줄</span>로 보입니다.
+              </dd>
+              <dt>Commit (확정)</dt>
+              <dd>
+                현재 조합을 최종 결과로 문서에 반영하는 행위. 새 음절을
+                시작하거나 Enter / 스페이스 등을 누르면 자동 발생.
+              </dd>
+              <dt>받침 이동</dt>
+              <dd>
+                "갃" 뒤에 ㅏ를 치면 "각"과 "사"로 나뉘듯, 완성된 음절 뒤에
+                모음이 오면 받침이 다음 음절의 초성으로 옮겨가는 규칙.
+                Sequential(두벌식) 모드에서만 적용.
+              </dd>
+              <dt>겹받침 (Compound Jong)</dt>
+              <dd>
+                ㄳ ㄵ ㄶ ㄺ ㄻ ㄼ ㄽ ㄾ ㄿ ㅀ ㅄ 등 두 자음으로 구성된 받침.
+                두 자음을 연달아 치면 자동으로 겹받침이 형성됩니다.
+              </dd>
+            </dl>
+          </section>
+
+          <section>
+            <h3>🪄 약어 속기 (Abbreviation)</h3>
+            <p>
+              짧은 입력이 자동으로 긴 문구로 <b>치환</b>되는 기능. 세벌식에서는
+              초성만 연속으로 쳐서 확장하는 게 특히 자연스럽습니다.
+            </p>
+            <dl>
+              <dt>초성 약어 (ChoSeq)</dt>
+              <dd>
+                초성 키 2개 이상을 연달아 쳐서 긴 문장으로 확장.
+                예: <code>ㄱㅅ</code> + 스페이스 → <b>감사합니다</b>,
+                <code>ㅇㄴㅎㅅㅇ</code> + 스페이스 → <b>안녕하세요</b>.
+                세벌식에서는 초성만 연속된 시점이 명백한 약어 신호라서
+                오인식이 거의 없습니다.
+              </dd>
+              <dt>문자 약어 (Literal)</dt>
+              <dd>
+                한글·영문 임의 텍스트로 트리거. 공백/줄바꿈 뒤에서만
+                인식되어 단어 중간에 오작동하지 않습니다.
+                예: <code>btw</code> → <b>그런데</b>,
+                <code>메일끝</code> → <b>감사합니다.\n$USERNAME 드림</b>,
+                그리고 <b>접속사 전체 사전</b>(그러나/그러면/그런데/그리고/
+                그래서/하지만/따라서/또한/반면에 …).
+              </dd>
+              <dt>어미 약어 (Ending)</dt>
+              <dd>
+                1글자 이상 치면 팝업으로 <b>자동완성</b>되는 한국어 종결
+                어미 모음. 단어 경계를 따지지 않기 때문에 "먹었<b>습</b>"
+                까지 친 상태에서도 <b>습니다 · 습니까</b> 후보가 뜹니다.
+                기본 사전에 <b>30여개</b> — 습니다/합니다/됩니다/있습니다/
+                없습니다/드립니다/겠습니다/었습니다/였습니다/십시오/
+                주세요/세요/해요/네요/군요 등.
+              </dd>
+              <dt>트리거 이벤트</dt>
+              <dd>
+                <b>Space</b>: 사용자가 스페이스를 누르면 매칭된 약어가 확장.
+                <b>Immediate</b>: 약어 시퀀스 완성 즉시 확장 (빠르지만 오확장 가능).
+                <b>JongCompletion</b>(세벌식 특화, 향후): 음절이 완성되는 시점에 트리거.
+              </dd>
+              <dt>롤백</dt>
+              <dd>
+                확장 시 사용자가 입력한 약어 문자열이 자동으로 지워지고
+                그 자리에 본문이 삽입됩니다. Backspace 한 번으로 확장 전
+                상태로 되돌리는 건 차후 지원 예정.
+              </dd>
+            </dl>
+            <p class="muted">
+              현재 등록된 약어 목록은 우측 사이드바에서 확인할 수 있습니다.
+              사용자 정의 약어 추가 UI 는 차후 릴리스에서 제공.
+            </p>
+
+            <h3 style="margin-top:14px">🔎 자동완성 팝업</h3>
+            <p>
+              입력 중인 내용이 등록된 약어의 <b>접두사</b> 와 일치하면
+              에디터 아래쪽에 추천 팝업이 떠서 후보를 보여줍니다.
+            </p>
+            <dl>
+              <dt><kbd>Tab</kbd></dt>
+              <dd>
+                선택된 후보를 즉시 채택합니다 (입력한 접두사는 삭제되고
+                본문이 삽입됩니다).
+              </dd>
+              <dt><kbd>↑</kbd> · <kbd>↓</kbd></dt>
+              <dd>여러 후보 사이를 이동합니다.</dd>
+              <dt><kbd>Esc</kbd></dt>
+              <dd>
+                팝업만 닫습니다. 다음 키 입력으로 다시 후보가 나타나면
+                팝업도 다시 표시됩니다.
+              </dd>
+              <dt>정확히 일치(<span class="preedit-demo">exact</span>)</dt>
+              <dd>
+                입력한 내용이 약어의 <b>전체</b> 트리거와 같을 때 노란색
+                배지로 표시되어 목록 맨 위에 놓입니다.
+              </dd>
+            </dl>
+          </section>
+
+          <section>
+            <h3>⌨️ 단축키</h3>
+            <dl>
+              <dt><kbd>Esc</kbd></dt>
+              <dd>현재 조합(preedit) 취소. 이미 확정된 텍스트는 남습니다.</dd>
+              <dt><kbd>Backspace</kbd></dt>
+              <dd>
+                조합 중이면 <b>자모 단위로</b> 하나씩 지움 (겹받침 → 단일 → 없음).
+                조합이 없으면 확정된 글자를 한 개 지웁니다.
+              </dd>
+              <dt><kbd>Enter</kbd></dt>
+              <dd>조합 중인 음절을 확정하고 새 줄로 넘어감.</dd>
+              <dt><kbd>Space</kbd></dt>
+              <dd>조합을 확정하고 공백을 삽입.</dd>
+              <dt><kbd>F1</kbd> · <kbd>?</kbd> 버튼</dt>
+              <dd>이 도움말 창을 엽니다.</dd>
+              <dt><kbd>Caps Lock</kbd> · <kbd>Shift</kbd>+<kbd>Space</kbd></dt>
+              <dd>한글 ↔ 영문 전환 (조합 중인 음절은 자동 확정).</dd>
+              <dt><kbd>Tab</kbd></dt>
+              <dd>자동완성 팝업이 열려 있을 때 선택된 약어를 채택.</dd>
+              <dt><kbd>↑</kbd> · <kbd>↓</kbd></dt>
+              <dd>팝업 내 후보 이동.</dd>
+            </dl>
+          </section>
+
+          <section>
+            <h3>📋 클립보드 · 되돌리기</h3>
+            <dl>
+              <dt><kbd>Ctrl</kbd>+<kbd>C</kbd> · <kbd>Cmd</kbd>+<kbd>C</kbd></dt>
+              <dd>선택한 텍스트 복사.</dd>
+              <dt><kbd>Ctrl</kbd>+<kbd>V</kbd> · <kbd>Cmd</kbd>+<kbd>V</kbd></dt>
+              <dd>클립보드 내용 붙여넣기. 조합 중인 음절은 먼저 확정됩니다.</dd>
+              <dt><kbd>Ctrl</kbd>+<kbd>X</kbd> · <kbd>Cmd</kbd>+<kbd>X</kbd></dt>
+              <dd>선택 텍스트 잘라내기 (복사 + 삭제).</dd>
+              <dt><kbd>Ctrl</kbd>+<kbd>Z</kbd> · <kbd>Cmd</kbd>+<kbd>Z</kbd></dt>
+              <dd>뒤로가기 (undo). 최근 200 단계까지 기억, 500ms 이내 연속 입력은 한 단계로 묶입니다.</dd>
+              <dt><kbd>Ctrl</kbd>+<kbd>F</kbd> · <kbd>Ctrl</kbd>+<kbd>Y</kbd> · <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></dt>
+              <dd>앞으로가기 (redo).</dd>
+              <dt><kbd>Ctrl</kbd>+<kbd>A</kbd> · <kbd>Cmd</kbd>+<kbd>A</kbd></dt>
+              <dd>전체 선택 (브라우저 기본 동작).</dd>
+            </dl>
+          </section>
+
+        </div>
+      </div>
+    </div>
+
+    <div id="file-ctxmenu" class="ctxmenu hidden" role="menu" aria-label="파일 메뉴"></div>
+
+    <div id="md-toolbar" class="md-toolbar hidden" role="toolbar" aria-label="서식 도구 모음">
+      <button type="button" data-md="bold" title="Bold (⌘B)"><span class="tb-ic">B</span></button>
+      <button type="button" data-md="italic" title="Italic (⌘I)"><span class="tb-ic tb-ic-i">I</span></button>
+      <button type="button" data-md="strike" title="취소선 (⌘⇧X)"><span class="tb-ic tb-ic-s">S</span></button>
+      <button type="button" data-md="code" title="Inline code (⌘E)" aria-label="Inline code">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6,4 2,8 6,12"/><polyline points="10,4 14,8 10,12"/></svg>
+      </button>
+      <span class="tb-sep"></span>
+      <button type="button" data-md="h1" title="제목 1 (⌘1)"><span class="tb-ic tb-ic-h">H<sub>1</sub></span></button>
+      <button type="button" data-md="h2" title="제목 2 (⌘2)"><span class="tb-ic tb-ic-h">H<sub>2</sub></span></button>
+      <button type="button" data-md="h3" title="제목 3 (⌘3)"><span class="tb-ic tb-ic-h">H<sub>3</sub></span></button>
+      <span class="tb-sep"></span>
+      <button type="button" data-md="task" title="체크리스트 (⌘⇧T)" aria-label="체크리스트">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="11" height="11" rx="2"/><polyline points="5,8 7.2,10 11,6"/></svg>
+      </button>
+      <button type="button" data-md="ul" title="글머리 기호 (⌘L)" aria-label="글머리 기호">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="3" cy="4" r="1" fill="currentColor"/><line x1="6.5" y1="4" x2="13.5" y2="4"/><circle cx="3" cy="8" r="1" fill="currentColor"/><line x1="6.5" y1="8" x2="13.5" y2="8"/><circle cx="3" cy="12" r="1" fill="currentColor"/><line x1="6.5" y1="12" x2="13.5" y2="12"/></svg>
+      </button>
+      <button type="button" data-md="ol" title="번호 매기기 (⌘⇧O)" aria-label="번호 매기기">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><text x="1.5" y="5.5" font-size="4.6" font-weight="700" fill="currentColor" stroke="none" font-family="-apple-system, sans-serif">1</text><line x1="6.5" y1="4" x2="13.5" y2="4"/><text x="1.5" y="9.7" font-size="4.6" font-weight="700" fill="currentColor" stroke="none" font-family="-apple-system, sans-serif">2</text><line x1="6.5" y1="8" x2="13.5" y2="8"/><text x="1.5" y="13.8" font-size="4.6" font-weight="700" fill="currentColor" stroke="none" font-family="-apple-system, sans-serif">3</text><line x1="6.5" y1="12" x2="13.5" y2="12"/></svg>
+      </button>
+      <button type="button" data-md="quote" title="인용 (⌘⇧Q)" aria-label="인용">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M4.2 3.5c-1.8 0.9-2.7 2.7-2.7 4.7v4.3h4.4V8.2H3.6c0-1.5 0.7-2.4 1.8-3.0l-1.2-1.7zm6 0c-1.8 0.9-2.7 2.7-2.7 4.7v4.3h4.4V8.2h-2.3c0-1.5 0.7-2.4 1.8-3.0l-1.2-1.7z"/></svg>
+      </button>
+      <span class="tb-sep"></span>
+      <button type="button" data-md="link" title="링크 (⌘K)" aria-label="링크">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 9.5 A3 3 0 0 1 6.5 5.3 L8.7 3.1 A3 3 0 0 1 12.9 7.3 L11.5 8.7"/><path d="M9.5 6.5 A3 3 0 0 1 9.5 10.7 L7.3 12.9 A3 3 0 0 1 3.1 8.7 L4.5 7.3"/></svg>
+      </button>
+      <button type="button" data-md="hr" title="가로줄 (⌘⇧-)" aria-label="가로줄">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="2" y1="8" x2="14" y2="8"/></svg>
+      </button>
+    </div>
+
+    <div class="workspace">
+      <aside id="files-pane" class="files-pane" aria-label="파일 탐색기">
+        <header class="files-head" data-tauri-drag-region>
+          <button id="files-open" class="files-open" type="button"
+                  title="폴더 열기 (⌘O)" aria-label="폴더 열기">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
+                 stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2 4.5a1 1 0 0 1 1-1h3.5l1.5 1.5H13a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-7.5z"/>
+            </svg>
+          </button>
+          <button id="files-refresh" class="files-refresh" type="button"
+                  title="새로고침" hidden>
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"
+                 stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 8a5 5 0 0 1 8.5-3.5M13 8a5 5 0 0 1-8.5 3.5"/>
+              <polyline points="11,2 11,4.5 13.5,4.5"/>
+              <polyline points="5,14 5,11.5 2.5,11.5"/>
+            </svg>
+          </button>
+          <button id="files-collapse" class="files-collapse" type="button"
+                  title="사이드바 접기/펼치기">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"
+                 stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="12" height="10" rx="1.5"/>
+              <line x1="6" y1="3" x2="6" y2="13"/>
+            </svg>
+          </button>
+        </header>
+        <div class="files-dir" id="files-dir" hidden></div>
+        <ul id="files-list" class="files-list" role="listbox"></ul>
+        <p class="files-empty" id="files-empty">
+          디렉터리를 열어주세요.
+        </p>
+      </aside>
+
+      <main class="workspace-main">
+        <div class="tab-bar" id="tab-bar" data-tauri-drag-region>
+          <ul id="tab-list" class="tab-list" role="tablist"></ul>
+          <button id="tab-new" class="tab-new" type="button" title="새 탭 (⌘T)"
+                  aria-label="새 탭">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"
+                 stroke="currentColor" stroke-width="1.6"
+                 stroke-linecap="round"><line x1="8" y1="3" x2="8" y2="13"/><line x1="3" y1="8" x2="13" y2="8"/></svg>
+          </button>
+        </div>
+        <div class="editor-wrap">
+          <div id="editor" class="editor" contenteditable="true" spellcheck="false"
+               lang="en" autocapitalize="off" autocomplete="off"
+               data-gramm="false" aria-label="새별 마크다운 에디터"></div>
+          <div id="suggestions" class="suggestions hidden" role="listbox"
+               aria-label="약어 추천">
+            <div class="suggestions-head">
+              <span>약어 추천</span>
+              <span class="suggestions-hint">
+                <kbd>Tab</kbd> 선택 · <kbd>↑</kbd><kbd>↓</kbd> 이동 · <kbd>⌫</kbd> 취소 · <kbd>Esc</kbd> 닫기
+              </span>
+            </div>
+            <ul id="suggestions-list" class="suggestions-list"></ul>
+          </div>
+        </div>
+      <aside class="info" id="side-info">
+        <section class="kb-panel" id="kb-panel" hidden>
+          <header>
+            <span class="k">키보드 매핑</span>
+            <span class="legend">
+              <span class="tag cho">초</span>
+              <span class="tag jung">중</span>
+              <span class="tag jong">종</span>
+            </span>
+          </header>
+          <div id="keyboard-map" class="keyboard-map"></div>
+          <p class="kb-foot">Shift 레이어는 작은 글씨로 표시</p>
+        </section>
+
+        <section class="abbr-panel" id="abbr-panel" hidden>
+          <header>
+            <span class="k">등록된 약어</span>
+            <span class="abbr-count" id="abbr-count"></span>
+          </header>
+          <div id="abbr-list" class="abbr-list"></div>
+          <p class="kb-foot">
+            초성 약어는 세벌식에서만 동작 · 스페이스/엔터로 확장
+          </p>
+        </section>
+        <div class="stats" hidden>
+          <div><span class="k">현재 FSM 상태</span><span id="fsm-state" class="v">Empty</span></div>
+          <div><span class="k">조합 중 (preedit)</span><span id="preedit-debug" class="v">—</span></div>
+          <div><span class="k">마지막 이벤트</span><span id="last-event" class="v">—</span></div>
+        </div>
+      </aside>
+      </main>
+    </div>
+
+    <div class="style-bar" id="style-bar" role="toolbar" aria-label="서식 도구 모음" hidden>
+      <button type="button" data-md="bold" title="굵게 (⌘B)"><span class="tb-ic">B</span></button>
+      <button type="button" data-md="italic" title="기울임 (⌘I)"><span class="tb-ic tb-ic-i">I</span></button>
+      <button type="button" data-md="strike" title="취소선 (⌘⇧X)"><span class="tb-ic tb-ic-s">S</span></button>
+      <button type="button" data-md="code" title="인라인 코드 (⌘E)" aria-label="인라인 코드">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6,4 2,8 6,12"/><polyline points="10,4 14,8 10,12"/></svg>
+      </button>
+      <span class="tb-sep"></span>
+      <button type="button" data-md="h1" title="제목 1 (⌘1)"><span class="tb-ic tb-ic-h">H<sub>1</sub></span></button>
+      <button type="button" data-md="h2" title="제목 2 (⌘2)"><span class="tb-ic tb-ic-h">H<sub>2</sub></span></button>
+      <button type="button" data-md="h3" title="제목 3 (⌘3)"><span class="tb-ic tb-ic-h">H<sub>3</sub></span></button>
+      <span class="tb-sep"></span>
+      <button type="button" data-md="task" title="체크리스트 (⌘⇧T)" aria-label="체크리스트">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="11" height="11" rx="2"/><polyline points="5,8 7.2,10 11,6"/></svg>
+      </button>
+      <button type="button" data-md="ul" title="글머리 기호 (⌘L)" aria-label="글머리">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="3" cy="4" r="1" fill="currentColor"/><line x1="6.5" y1="4" x2="13.5" y2="4"/><circle cx="3" cy="8" r="1" fill="currentColor"/><line x1="6.5" y1="8" x2="13.5" y2="8"/><circle cx="3" cy="12" r="1" fill="currentColor"/><line x1="6.5" y1="12" x2="13.5" y2="12"/></svg>
+      </button>
+      <button type="button" data-md="ol" title="번호 매기기 (⌘⇧O)" aria-label="번호 매기기">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><text x="1.5" y="5.5" font-size="4.6" font-weight="700" fill="currentColor" stroke="none" font-family="-apple-system, sans-serif">1</text><line x1="6.5" y1="4" x2="13.5" y2="4"/><text x="1.5" y="9.7" font-size="4.6" font-weight="700" fill="currentColor" stroke="none" font-family="-apple-system, sans-serif">2</text><line x1="6.5" y1="8" x2="13.5" y2="8"/><text x="1.5" y="13.8" font-size="4.6" font-weight="700" fill="currentColor" stroke="none" font-family="-apple-system, sans-serif">3</text><line x1="6.5" y1="12" x2="13.5" y2="12"/></svg>
+      </button>
+      <button type="button" data-md="quote" title="인용 (⌘⇧Q)" aria-label="인용">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M4.2 3.5c-1.8 0.9-2.7 2.7-2.7 4.7v4.3h4.4V8.2H3.6c0-1.5 0.7-2.4 1.8-3.0l-1.2-1.7zm6 0c-1.8 0.9-2.7 2.7-2.7 4.7v4.3h4.4V8.2h-2.3c0-1.5 0.7-2.4 1.8-3.0l-1.2-1.7z"/></svg>
+      </button>
+      <span class="tb-sep"></span>
+      <button type="button" data-md="link" title="링크 (⌘K)" aria-label="링크">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 9.5 A3 3 0 0 1 6.5 5.3 L8.7 3.1 A3 3 0 0 1 12.9 7.3 L11.5 8.7"/><path d="M9.5 6.5 A3 3 0 0 1 9.5 10.7 L7.3 12.9 A3 3 0 0 1 3.1 8.7 L4.5 7.3"/></svg>
+      </button>
+      <button type="button" data-md="hr" title="가로줄 (⌘⇧-)" aria-label="가로줄">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="2" y1="8" x2="14" y2="8"/></svg>
+      </button>
+    </div>
+
+    <footer class="status-bar" id="status-bar">
+      <div class="status-left">
+        <span class="status-layout" id="status-layout" title="현재 글자판"></span>
+        <span class="status-compose" id="status-compose" title="세벌식 모아치기 상태" hidden></span>
+        <button id="lang-toggle" class="lang-toggle" type="button"
+                title="한글 ↔ 영문 전환 (Shift+Space)"
+                aria-label="언어 전환">
+          <span class="lang-current" id="lang-current">한</span>
+          <span class="lang-arrow">⇄</span>
+          <span class="lang-other" id="lang-other">EN</span>
+        </button>
+        <span class="status-item" id="status-path"></span>
+      </div>
+      <div class="status-right">
+      </div>
+    </footer>
+
+    <div id="appearance-modal" class="settings-modal hidden" role="dialog" aria-modal="true"
+         aria-labelledby="appearance-title">
+      <div class="settings-backdrop"></div>
+      <div class="settings-panel ap-panel">
+        <header class="settings-head">
+          <h2 id="appearance-title">모양 설정</h2>
+          <button id="appearance-close" class="settings-close" aria-label="닫기">×</button>
+        </header>
+        <div class="settings-body ap-body">
+
+          <div class="ap-cols">
+            <section class="ap-section">
+              <h3>서체</h3>
+              <div class="ap-chips" id="ap-font-family" role="radiogroup">
+                <button type="button" class="ap-chip" data-font="system">System</button>
+                <button type="button" class="ap-chip" data-font="sans">Sans-serif</button>
+                <button type="button" class="ap-chip" data-font="serif">Serif</button>
+                <button type="button" class="ap-chip" data-font="mono">Monospace</button>
+                <button type="button" class="ap-chip" data-font="nanum-gothic">나눔고딕</button>
+                <button type="button" class="ap-chip" data-font="nanum-myeongjo">나눔명조</button>
+                <button type="button" class="ap-chip" data-font="noto-sans-kr">Noto Sans KR</button>
+                <button type="button" class="ap-chip" data-font="noto-serif-kr">본명조</button>
+                <button type="button" class="ap-chip" data-font="bm-dohyeon" style="font-family:'BM Dohyeon',sans-serif">배민도현체</button>
+              </div>
+            </section>
+
+            <section class="ap-section">
+              <h3>UI 폰트 배율</h3>
+              <div class="ap-chips" id="ap-ui-scale" role="radiogroup">
+                <button type="button" class="ap-chip" data-scale="0.88">컴팩트</button>
+                <button type="button" class="ap-chip" data-scale="1.00">표준</button>
+                <button type="button" class="ap-chip" data-scale="1.08">편안한</button>
+                <button type="button" class="ap-chip" data-scale="1.18">크게</button>
+                <button type="button" class="ap-chip" data-scale="1.32">매우 크게</button>
+              </div>
+
+              <h3 style="margin-top:22px">이미지 크기</h3>
+              <div class="ap-chips" id="ap-image-size" role="radiogroup">
+                <button type="button" class="ap-chip" data-imgsz="shrink">축소</button>
+                <button type="button" class="ap-chip" data-imgsz="actual">실제 크기</button>
+              </div>
+            </section>
+          </div>
+
+          <section class="ap-section ap-section-full">
+            <div class="ap-row">
+              <div class="ap-rowhead">
+                <span>줄 간격</span>
+                <span class="ap-val" id="ap-line-height-val">1.80</span>
+              </div>
+              <input type="range" id="ap-line-height" min="1.30" max="2.40" step="0.05" value="1.80" />
+              <div class="ap-scale-labels"><span>좁게</span><span>넓게</span></div>
+            </div>
+          </section>
+
+          <section class="ap-section ap-section-full">
+            <h3>영역별 폰트 크기</h3>
+            <div class="ap-grid">
+              <div class="ap-row">
+                <div class="ap-rowhead"><span>App Base</span><span class="ap-val" id="ap-fs-base-val">13px</span></div>
+                <input type="range" id="ap-fs-base" min="11" max="18" step="1" value="13" />
+              </div>
+              <div class="ap-row">
+                <div class="ap-rowhead"><span>Right Panel</span><span class="ap-val" id="ap-fs-right-val">12px</span></div>
+                <input type="range" id="ap-fs-right" min="10" max="16" step="1" value="12" />
+              </div>
+              <div class="ap-row">
+                <div class="ap-rowhead"><span>Left Sidebar</span><span class="ap-val" id="ap-fs-sidebar-val">12px</span></div>
+                <input type="range" id="ap-fs-sidebar" min="10" max="16" step="1" value="12" />
+              </div>
+              <div class="ap-row">
+                <div class="ap-rowhead"><span>Toolbar / Tab</span><span class="ap-val" id="ap-fs-toolbar-val">13px</span></div>
+                <input type="range" id="ap-fs-toolbar" min="11" max="16" step="1" value="13" />
+              </div>
+              <div class="ap-row">
+                <div class="ap-rowhead"><span>Status Bar</span><span class="ap-val" id="ap-fs-status-val">12px</span></div>
+                <input type="range" id="ap-fs-status" min="10" max="14" step="1" value="12" />
+              </div>
+            </div>
+          </section>
+
+        </div>
+      </div>
+    </div>
+
+    <div id="prompt-modal" class="confirm-modal hidden" role="dialog" aria-modal="true"
+         aria-labelledby="prompt-title">
+      <div class="settings-backdrop"></div>
+      <div class="confirm-panel">
+        <h3 id="prompt-title">이름 입력</h3>
+        <p id="prompt-body" class="prompt-body"></p>
+        <input type="text" id="prompt-input" class="prompt-input" autocomplete="off" />
+        <div class="confirm-actions">
+          <button id="prompt-cancel" class="btn btn-ghost" type="button">취소</button>
+          <button id="prompt-ok" class="btn btn-primary" type="button">확인</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="confirm-modal" class="confirm-modal hidden" role="dialog" aria-modal="true"
+         aria-labelledby="confirm-title">
+      <div class="settings-backdrop"></div>
+      <div class="confirm-panel">
+        <h3 id="confirm-title">저장되지 않은 변경 사항</h3>
+        <p id="confirm-body"></p>
+        <div class="confirm-actions">
+          <button id="confirm-cancel" class="btn btn-ghost" type="button">취소</button>
+          <button id="confirm-discard" class="btn btn-danger" type="button">저장 안 함</button>
+          <button id="confirm-save" class="btn btn-primary" type="button">저장</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="about-modal" class="about-modal hidden" role="dialog" aria-modal="true"
+         aria-labelledby="about-title">
+      <div class="about-backdrop"></div>
+      <div class="about-panel" role="document">
+        <button id="about-close" class="about-close" aria-label="닫기">×</button>
+
+        <div class="about-icon" aria-hidden="true">
+          <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <radialGradient id="about-sky" cx="0.5" cy="0.48" r="0.78">
+                <stop offset="0%"   stop-color="#6B3288"/>
+                <stop offset="55%"  stop-color="#26205A"/>
+                <stop offset="100%" stop-color="#0D0B36"/>
+              </radialGradient>
+              <linearGradient id="about-petal" x1="0.5" y1="0" x2="0.5" y2="1">
+                <stop offset="0%"   stop-color="#FFF2B4"/>
+                <stop offset="28%"  stop-color="#FFB368"/>
+                <stop offset="62%"  stop-color="#F2657A"/>
+                <stop offset="100%" stop-color="#B62434"/>
+              </linearGradient>
+              <radialGradient id="about-heart" cx="0.5" cy="0.45" r="0.55">
+                <stop offset="0%"   stop-color="#FFD878"/>
+                <stop offset="40%"  stop-color="#E03A36"/>
+                <stop offset="100%" stop-color="#6E0E1A"/>
+              </radialGradient>
+              <radialGradient id="about-glow" cx="0.5" cy="0.5" r="0.5">
+                <stop offset="0%"   stop-color="#FFCEA0" stop-opacity="0.55"/>
+                <stop offset="55%"  stop-color="#FF6A7A" stop-opacity="0.22"/>
+                <stop offset="100%" stop-color="#B62434" stop-opacity="0"/>
+              </radialGradient>
+              <radialGradient id="about-twinkle" cx="0.5" cy="0.5" r="0.5">
+                <stop offset="0%"  stop-color="#FFFFFF" stop-opacity="0.9"/>
+                <stop offset="60%" stop-color="#FFFFFF" stop-opacity="0"/>
+              </radialGradient>
+            </defs>
+
+            <rect x="0" y="0" width="1024" height="1024" rx="232" ry="232" fill="url(#about-sky)"/>
+
+            <!-- Counter-spinning warm bloom behind the flower for depth. -->
+            <g class="about-glow-spin">
+              <circle cx="512" cy="512" r="440" fill="url(#about-glow)"/>
+            </g>
+
+            <!--
+              Spin layer: owns the rotation transform only. Inside it,
+              a pulse layer owns a scale-breath. The sparks live on the
+              spin layer too so they rotate with the flower.
+            -->
+            <g class="about-spin">
+              <g class="about-pulse">
+                <!-- Ember sparks (5), rotating with the flower -->
+                <g fill="#FFE79E" class="about-sparks">
+                  <circle cx="842" cy="238" r="13" opacity="0.9"/>
+                  <path d="M 898 310 L 914 326 L 898 342 L 882 326 Z" opacity="0.72"/>
+                  <circle cx="192" cy="818" r="16" opacity="0.85"/>
+                  <path d="M 858 780 L 876 798 L 858 816 L 840 798 Z" opacity="0.65"/>
+                  <circle cx="232" cy="270" r="7"  opacity="0.55"/>
+                </g>
+
+                <!-- 5 mugunghwa petals × flame gradient -->
+                <g class="about-star-shape" fill="url(#about-petal)">
+                  <path d="M 512 512 C 340 440, 280 240, 512 104 C 744 240, 684 440, 512 512 Z"/>
+                  <path d="M 512 512 C 340 440, 280 240, 512 104 C 744 240, 684 440, 512 512 Z"
+                        transform="rotate(72 512 512)"/>
+                  <path d="M 512 512 C 340 440, 280 240, 512 104 C 744 240, 684 440, 512 512 Z"
+                        transform="rotate(144 512 512)"/>
+                  <path d="M 512 512 C 340 440, 280 240, 512 104 C 744 240, 684 440, 512 512 Z"
+                        transform="rotate(216 512 512)"/>
+                  <path d="M 512 512 C 340 440, 280 240, 512 104 C 744 240, 684 440, 512 512 Z"
+                        transform="rotate(288 512 512)"/>
+                </g>
+              </g>
+            </g>
+
+            <!-- Stamen + heart sit still at center; the core breathes. -->
+            <g class="about-core-breathe">
+              <circle cx="512" cy="512" r="72" fill="url(#about-heart)"/>
+              <g fill="#FFE48A">
+                <circle cx="512" cy="448" r="7"/>
+                <circle cx="573" cy="492" r="6" transform="rotate(72 512 512)"/>
+                <circle cx="573" cy="492" r="6" transform="rotate(144 512 512)"/>
+                <circle cx="573" cy="492" r="6" transform="rotate(216 512 512)"/>
+                <circle cx="573" cy="492" r="6" transform="rotate(288 512 512)"/>
+              </g>
+              <circle cx="512" cy="512" r="16" fill="#FFF4CE"/>
+            </g>
+
+            <!-- Three orbiting sparks at varying radii, each in its own
+                 spin layer so they rotate independently. -->
+            <g class="about-orbit-1">
+              <circle cx="512" cy="60"  r="9" fill="#FFF2B4" opacity="0.95"/>
+            </g>
+            <g class="about-orbit-2">
+              <circle cx="960" cy="512" r="6" fill="#FFCB66" opacity="0.85"/>
+            </g>
+            <g class="about-orbit-3">
+              <circle cx="512" cy="968" r="5" fill="#FFE79E" opacity="0.8"/>
+            </g>
+
+            <!-- White flash bloom that twinkles every few seconds. -->
+            <circle cx="512" cy="512" r="300" fill="url(#about-twinkle)" class="about-twinkle"/>
+          </svg>
+        </div>
+
+        <h2 id="about-title" class="about-wordmark" aria-label="새별">
+          <span class="about-letter" style="--i:0">새</span><span class="about-letter" style="--i:1">별</span>
+          <span class="about-sheen" aria-hidden="true"></span>
+        </h2>
+
+        <p class="about-fullname">새별 마크다운 에디터</p>
+        <p class="about-tagline">한글 입력을 가장 깊이 이해하는 마크다운 에디터</p>
+        <p class="about-desc">
+          두벌식 · 세벌식 · 모아치기까지 —
+          <strong>한국적인 자판 배열을 품은</strong> 조합 엔진이
+          타자의 흐름을 끊지 않고 한글을 <strong>가장 빠르게</strong>
+          받아 적습니다.
+        </p>
+
+        <div class="about-meta">
+          <span class="about-version" id="about-version">v0.1.0</span>
+          <span class="about-sep">·</span>
+          <span class="about-code">sbmd</span>
+        </div>
+
+        <p class="about-credit">made with <span class="about-heart">♥</span> ·
+          <a href="#" class="about-leaf-link" id="about-leaf-link"
+             data-url="https://github.com/leaf-kit/saebyeol.md">leaf</a></p>
+      </div>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>

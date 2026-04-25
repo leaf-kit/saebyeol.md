@@ -1,0 +1,34 @@
+[package]
+# Cargo package name for the desktop shell. Korean brand name is
+# "새별"; this is its ASCII alias.
+name = "sb-md"
+description = "새별 (sb-md) — 새별 마크다운 에디터 Tauri 데스크톱 셸."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = { version = "0.8", default-features = false, features = ["parse", "display"] }
+rfd = "0.15"
+lib-ime = { path = "../../../crates/lib-ime" }
+
+# 런치패드·독·Finder 에서는 tauri.conf.json 의 `productName` ("새별") 이
+# 표시된다. 실행 바이너리 이름은 macOS `.app/Contents/MacOS/` 에 들어가는
+# 파일명으로만 쓰이므로 로마자 영문 이름인 "Saebyeol" 을 사용한다.
+[[bin]]
+name = "Saebyeol"
+path = "src/main.rs"

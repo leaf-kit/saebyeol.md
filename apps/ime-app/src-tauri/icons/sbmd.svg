@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  새별 마크다운 에디터 (sbmd) — application icon.
+
+  Motif: 무궁화 × 샛별 — the national flower of Korea (5 petals,
+  rose-red heart) fused with a morning star (pointed petal tips,
+  flame gradient, dawn sky). Five petals rotate 72° apart in a
+  subtly whirling arrangement; a deep hibiscus-red core holds the
+  bloom's heart; ember sparks trail in the negative space.
+
+  Reads at three scales:
+    - small (32 px): 5-petal silhouette on dawn backdrop, clear
+      star-flower shape.
+    - medium (128 px): flame gradient and red heart show through.
+    - large (512 px+): stamen dots and spark accents appear.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <!-- Dawn sky, slightly warmer plum so hibiscus red harmonizes -->
+    <radialGradient id="sky" cx="0.5" cy="0.48" r="0.78">
+      <stop offset="0%"   stop-color="#6B3288"/>
+      <stop offset="55%"  stop-color="#26205A"/>
+      <stop offset="100%" stop-color="#0D0B36"/>
+    </radialGradient>
+    <!-- Petal gradient: dawn-gold tip → peach → rose → hibiscus red -->
+    <linearGradient id="petal" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%"   stop-color="#FFF2B4"/>
+      <stop offset="28%"  stop-color="#FFB368"/>
+      <stop offset="62%"  stop-color="#F2657A"/>
+      <stop offset="100%" stop-color="#B62434"/>
+    </linearGradient>
+    <!-- Radial heart: warm amber → hibiscus red → burgundy shadow -->
+    <radialGradient id="heart" cx="0.5" cy="0.45" r="0.55">
+      <stop offset="0%"   stop-color="#FFD878"/>
+      <stop offset="40%"  stop-color="#E03A36"/>
+      <stop offset="100%" stop-color="#6E0E1A"/>
+    </radialGradient>
+    <!-- Warm bloom behind the flower -->
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%"   stop-color="#FFCEA0" stop-opacity="0.55"/>
+      <stop offset="55%"  stop-color="#FF6A7A" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#B62434" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Backdrop -->
+  <rect x="0" y="0" width="1024" height="1024" rx="232" ry="232" fill="url(#sky)"/>
+
+  <!-- Warm bloom behind the flower -->
+  <circle cx="512" cy="512" r="440" fill="url(#glow)"/>
+
+  <!-- Ember sparks (asymmetric constellation, only visible at ≥128 px) -->
+  <g fill="#FFE79E">
+    <circle cx="842" cy="238" r="13" opacity="0.88"/>
+    <path d="M 898 310 L 914 326 L 898 342 L 882 326 Z" opacity="0.68"/>
+    <circle cx="192" cy="818" r="16" opacity="0.85"/>
+    <path d="M 858 780 L 876 798 L 858 816 L 840 798 Z" opacity="0.6"/>
+    <circle cx="232" cy="270" r="7"  opacity="0.55"/>
+  </g>
+
+  <!--
+    Five pointed petals — 무궁화 body proportions (narrow base, full
+    body, slightly pointed tip) fused with 별 energy (flame gradient,
+    sharp enough tip to read as a star point). Rotated 72° each so
+    the composition balances but still feels rhythmic.
+  -->
+  <g fill="url(#petal)">
+    <path d="M 512 512
+             C 340 440, 280 240, 512 104
+             C 744 240, 684 440, 512 512 Z"/>
+    <path d="M 512 512
+             C 340 440, 280 240, 512 104
+             C 744 240, 684 440, 512 512 Z"
+          transform="rotate(72 512 512)"/>
+    <path d="M 512 512
+             C 340 440, 280 240, 512 104
+             C 744 240, 684 440, 512 512 Z"
+          transform="rotate(144 512 512)"/>
+    <path d="M 512 512
+             C 340 440, 280 240, 512 104
+             C 744 240, 684 440, 512 512 Z"
+          transform="rotate(216 512 512)"/>
+    <path d="M 512 512
+             C 340 440, 280 240, 512 104
+             C 744 240, 684 440, 512 512 Z"
+          transform="rotate(288 512 512)"/>
+  </g>
+
+  <!-- Hibiscus heart — the unmistakable 무궁화 signature -->
+  <circle cx="512" cy="512" r="72" fill="url(#heart)"/>
+
+  <!-- Stamen: 5 tiny gold dots radiating from the heart, matching
+       the 5-petal symmetry (only reads at ≥256 px) -->
+  <g fill="#FFE48A">
+    <circle cx="512" cy="448" r="7"/>
+    <circle cx="573" cy="492" r="6" transform="rotate(72 512 512)"/>
+    <circle cx="573" cy="492" r="6" transform="rotate(144 512 512)"/>
+    <circle cx="573" cy="492" r="6" transform="rotate(216 512 512)"/>
+    <circle cx="573" cy="492" r="6" transform="rotate(288 512 512)"/>
+  </g>
+
+  <!-- Bright inner pollen dot -->
+  <circle cx="512" cy="512" r="16" fill="#FFF4CE"/>
+</svg>

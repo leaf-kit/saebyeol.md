@@ -1,0 +1,55 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "새별",
+  "version": "0.1.1",
+  "identifier": "dev.leaf.sbmd",
+  "build": {
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "새별 마크다운 에디터",
+        "width": 900,
+        "height": 620,
+        "minWidth": 640,
+        "minHeight": 420,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "createUpdaterArtifacts": false,
+    "macOS": {
+      "signingIdentity": "-",
+      "entitlements": "Entitlements.plist",
+      "minimumSystemVersion": "11.0"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/leaf-kit/saebyeol.md/releases/latest/download/latest.json"
+      ],
+      "pubkey": "REPLACE_ME_WITH_OUTPUT_OF_cargo_tauri_signer_generate",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+[package]
+name = "lib-ime"
+description = "Core input engine for 새별 마크다운 에디터 (sbmd): Hangul Jamo FSM, layouts, and output-form conversion."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+default = ["toml-layout"]
+# Enables loading user-defined layouts from TOML files via `layout::custom`.
+toml-layout = ["dep:serde", "dep:toml"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"], optional = true }
+toml = { version = "0.8", optional = true, default-features = false, features = ["parse"] }

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Hardened Runtime + 노터리제이션 통과를 위한 최소 entitlements.
+       Tauri/wry 가 런타임에 JIT 메모리, JS 인터프리터, dynamic 로더를
+       사용하므로 다음 세 가지가 필요하다. 그 외 권한은 의도적으로
+       부여하지 않아 사용자 시스템에 대한 노출을 최소화한다. -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+</dict>
+</plist>

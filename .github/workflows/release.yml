@@ -1,0 +1,195 @@
+# 태그를 `v*.*.*` 로 푸시하면 macOS arm64 / x64 양쪽으로 릴리스 빌드를
+# 만들고, 서명·번들 후 GitHub Release 에 dmg / app.tar.gz / app.tar.gz.sig
+# 그리고 Tauri updater 매니페스트(`latest.json`) 를 함께 업로드한다.
+#
+# 사전 준비 (저장소 Secrets):
+#   TAURI_SIGNING_PRIVATE_KEY           — `cargo tauri signer generate` 산출물
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  — 위 키 생성 시 입력한 비밀번호
+#
+# 선택 사항:
+#   APPLE_CERTIFICATE / APPLE_CERTIFICATE_PASSWORD / APPLE_SIGNING_IDENTITY
+#   APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID
+#       → 채워 넣으면 코드사이닝 + 노터리제이션 까지 진행. 비워두면
+#         첫 실행 시 macOS Gatekeeper 가 "확인되지 않은 개발자" 경고를
+#         띄울 수 있으나 cask 다운로드/설치 자체는 동작한다.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  publish-tauri:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+            args: --target aarch64-apple-darwin
+          - platform: macos-latest
+            target: x86_64-apple-darwin
+            args: --target x86_64-apple-darwin
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: './apps/ime-app/src-tauri -> target'
+
+      - name: Run tests (per CLAUDE.md — 빌드 전에 테스트)
+        run: cargo test --workspace --locked
+
+      - name: Compose release body from CHANGELOG.md
+        # 태그명(`v0.1.0`) 과 일치하는 `## v0.1.0` 헤딩부터 다음 `## v` 까지를
+        # CHANGELOG.md 에서 잘라 내고, 그 뒤에 설치/자동 업데이트 안내를
+        # 붙여 GitHub Release 본문으로 사용한다.
+        id: notes
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          SECTION_FILE=$(mktemp)
+          awk -v ver="$TAG" '
+            $0 ~ "^## " ver { found=1; next }
+            found && /^## v/ { exit }
+            found { print }
+          ' CHANGELOG.md > "$SECTION_FILE"
+          if [ ! -s "$SECTION_FILE" ]; then
+            echo "## ${TAG}" > "$SECTION_FILE"
+            echo "" >> "$SECTION_FILE"
+            echo "(CHANGELOG.md 에 ${TAG} 항목이 없어 자동 노트가 비어 있습니다.)" >> "$SECTION_FILE"
+          fi
+          BODY_FILE=$(mktemp)
+          # CHANGELOG 의 해당 버전 섹션 + 정적 설치/자동 업데이트 안내를
+          # 합친다. 정적 섹션은 .github/release-body-suffix.md 에 보관해
+          # 이 워크플로 YAML 안에서 markdown(--- · ``` · 백틱) 이 직접
+          # 등장하지 않도록 한다 (block scalar 와의 충돌 방지).
+          cat "$SECTION_FILE" .github/release-body-suffix.md > "$BODY_FILE"
+          {
+            echo "body<<RELEASE_BODY_EOF"
+            cat "$BODY_FILE"
+            echo "RELEASE_BODY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build & release with tauri-action
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # 아래 Apple 시크릿이 모두 등록되어 있어야 코드사이닝과
+          # 노터리제이션이 통과한다. APPLE_SIGNING_IDENTITY 시크릿 값이
+          # tauri.conf.json 의 signingIdentity ("-") 를 런타임에 override.
+          # 시크릿이 비어 있으면 tauri-action 이 빈 PKCS12 import 를
+          # 시도하다 실패하므로, 등록 전에는 이 블록을 주석 처리할 것.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          projectPath: apps/ime-app/src-tauri
+          tagName: ${{ github.ref_name }}
+          releaseName: '새별 ${{ github.ref_name }}'
+          releaseBody: ${{ steps.notes.outputs.body }}
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: false
+          args: ${{ matrix.args }}
+
+  bump-cask-sha:
+    needs: publish-tauri
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Compute SHA256 of arm64 dmg and patch Casks/saebyeol.rb
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          # productName 이 한국어("새별") → bundler 가 dmg 파일명에서
+          # 비-ASCII 를 strip → prefix 가 빈 _${version}_${arch}.dmg 형태.
+          ARM_URL="https://github.com/leaf-kit/saebyeol.md/releases/download/${TAG}/_${VERSION}_aarch64.dmg"
+          INTEL_URL="https://github.com/leaf-kit/saebyeol.md/releases/download/${TAG}/_${VERSION}_x64.dmg"
+          # 두 자산이 모두 게시되기까지 잠시 기다린다 (CDN 반영 대기).
+          for i in 1 2 3 4 5 6; do
+            if curl -sfLI "$ARM_URL" >/dev/null && curl -sfLI "$INTEL_URL" >/dev/null; then
+              break
+            fi
+            sleep 10
+          done
+          ARM_SHA=$(curl -sfL "$ARM_URL" | shasum -a 256 | awk '{print $1}')
+          INTEL_SHA=$(curl -sfL "$INTEL_URL" | shasum -a 256 | awk '{print $1}')
+          if [ -z "$ARM_SHA" ] || [ -z "$INTEL_SHA" ]; then
+            echo "::error::failed to compute sha256 (arm=$ARM_SHA intel=$INTEL_SHA)"
+            exit 1
+          fi
+          # version 라인은 단순 sed. sha256 블록은 두 줄에 걸쳐 있어
+          # 별도의 .github/scripts/bump_cask_sha.py 로 정규식 치환한다
+          # (workflow YAML 안에 heredoc 으로 두면 block scalar 들여쓰기와
+          # 충돌하므로 파일 분리).
+          /usr/bin/sed -i '' "s/^  version \".*\"$/  version \"${VERSION}\"/" Casks/saebyeol.rb
+          ARM_SHA="$ARM_SHA" INTEL_SHA="$INTEL_SHA" python3 .github/scripts/bump_cask_sha.py
+
+      - name: Commit & push cask bump (메인 저장소)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- Casks/saebyeol.rb; then
+            echo "cask already up to date"
+            exit 0
+          fi
+          git config user.name "leaf-kit"
+          git config user.email "leaf-kit@users.noreply.github.com"
+          git add Casks/saebyeol.rb
+          git commit -m "cask: ${GITHUB_REF_NAME} 버전·SHA 갱신"
+          git push origin HEAD:main
+
+      - name: Mirror cask to homebrew tap (leaf-kit/homebrew-saebyeol.md)
+        # `TAP_GITHUB_TOKEN` 시크릿이 없으면 미러링은 건너뛴다 (메인
+        # 저장소의 Casks/ 만 갱신된 상태로 끝남). PAT 가 있으면 tap
+        # 저장소도 함께 갱신해 `brew tap leaf-kit/saebyeol.md` 가 즉시
+        # 새 버전을 받아간다.
+        if: ${{ env.TAP_PAT != '' }}
+        env:
+          TAP_PAT: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAP_DIR=$(mktemp -d)
+          git clone "https://x-access-token:${TAP_PAT}@github.com/leaf-kit/homebrew-saebyeol.md.git" "$TAP_DIR"
+          cp Casks/saebyeol.rb "$TAP_DIR/Casks/saebyeol.rb"
+          cd "$TAP_DIR"
+          if git diff --quiet -- Casks/saebyeol.rb; then
+            echo "tap cask already up to date"
+            exit 0
+          fi
+          git config user.name "leaf-kit"
+          git config user.email "leaf-kit@users.noreply.github.com"
+          git add Casks/saebyeol.rb
+          git commit -m "cask: ${GITHUB_REF_NAME} 버전·SHA 갱신 (메인 저장소 미러)"
+          git push origin HEAD:main
