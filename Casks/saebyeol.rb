@@ -8,11 +8,11 @@ cask "saebyeol" do
   sha256 arm:   "d1774569f4d26a8e8fa4e0d369ff2e4b1a594318625a9683205c78a970225e80",
          intel: "a338e6f42a483c6abfb1973c014e8ffb48d9caef25afdd0a875b04f5aa410a4d"
 
-  # productName 이 한국어("새별") 라 Tauri bundler 가 dmg 파일명에서
-  # 비-ASCII 문자를 sanitize 한다 → prefix 가 비어 _#{version}_#{arch}.dmg
-  # 형태가 된다. 보기엔 어색하지만 .app 폴더는 정상적으로 새별.app 로
-  # 만들어지므로 사용자에게는 한글 이름이 노출된다.
-  url "https://github.com/leaf-kit/saebyeol.md/releases/download/v#{version}/_#{version}_#{arch}.dmg"
+  # productName "새별" 의 ASCII-sanitize 결과로 tauri 가 만든 dmg 자산은
+  # `_#{version}_#{arch}.dmg` 형태로 prefix 가 비어 있지만, release 워크
+  # 플로의 rename 단계가 사용자에게 보이는 이름을 saebyeol_*.dmg 로 다시
+  # 올린다. .app 폴더는 새별.app 로 그대로 유지된다.
+  url "https://github.com/leaf-kit/saebyeol.md/releases/download/v#{version}/saebyeol_#{version}_#{arch}.dmg"
   name "Saebyeol"
   name "새별"
   desc "Markdown editor with built-in Hangul IME (모아치기 · 세벌식 · 두벌식)"

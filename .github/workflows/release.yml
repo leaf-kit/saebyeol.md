@@ -112,6 +112,42 @@ jobs:
           updaterJsonPreferNsis: false
           args: ${{ matrix.args }}
 
+      - name: Rename release assets — `_*.{dmg,app.tar.gz}` → `saebyeol_*`
+        # productName "새별" 의 ASCII-sanitize 결과로 dmg/app.tar.gz 자산명
+        # prefix 가 비어 있는 (`_${version}_${arch}.dmg`) 형태로 게시된다.
+        # 사용자에게 보이는 다운로드 이름이 깔끔하도록 saebyeol_ prefix 로
+        # 다시 업로드하고 옛 이름은 삭제한다. matrix 가 arch 별로 돌므로
+        # 각 잡은 자기 arch 자산만 처리해 race 를 피한다.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          case "${{ matrix.target }}" in
+            aarch64-apple-darwin) ARCH=aarch64 ;;
+            x86_64-apple-darwin)  ARCH=x64 ;;
+            *) echo "::error::unknown matrix target ${{ matrix.target }}"; exit 1 ;;
+          esac
+          TMP=$(mktemp -d)
+          # 자산이 게시되기까지 잠시 대기.
+          for i in 1 2 3 4 5 6; do
+            assets=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' || true)
+            if echo "$assets" | grep -q "^_${VERSION}_${ARCH}\.dmg$" \
+               && echo "$assets" | grep -q "^_${ARCH}\.app\.tar\.gz$"; then
+              break
+            fi
+            sleep 8
+          done
+          # 다운로드 → 이름 앞에 saebyeol prepend → 재업로드 → 옛 자산 삭제.
+          for OLD in "_${VERSION}_${ARCH}.dmg" "_${ARCH}.app.tar.gz"; do
+            NEW="saebyeol${OLD}"
+            gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$OLD" -D "$TMP" --clobber
+            mv "$TMP/$OLD" "$TMP/$NEW"
+            gh release upload "$TAG" "$TMP/$NEW" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release delete-asset "$TAG" "$OLD" --repo "$GITHUB_REPOSITORY" --yes || true
+          done
+
   bump-cask-sha:
     needs: publish-tauri
     runs-on: macos-latest
@@ -131,10 +167,9 @@ jobs:
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
           VERSION="${TAG#v}"
-          # productName 이 한국어("새별") → bundler 가 dmg 파일명에서
-          # 비-ASCII 를 strip → prefix 가 빈 _${version}_${arch}.dmg 형태.
-          ARM_URL="https://github.com/leaf-kit/saebyeol.md/releases/download/${TAG}/_${VERSION}_aarch64.dmg"
-          INTEL_URL="https://github.com/leaf-kit/saebyeol.md/releases/download/${TAG}/_${VERSION}_x64.dmg"
+          # publish-tauri 의 rename 단계가 끝나면 자산명은 saebyeol_${ver}_${arch}.dmg.
+          ARM_URL="https://github.com/leaf-kit/saebyeol.md/releases/download/${TAG}/saebyeol_${VERSION}_aarch64.dmg"
+          INTEL_URL="https://github.com/leaf-kit/saebyeol.md/releases/download/${TAG}/saebyeol_${VERSION}_x64.dmg"
           # 두 자산이 모두 게시되기까지 잠시 기다린다 (CDN 반영 대기).
           for i in 1 2 3 4 5 6; do
             if curl -sfLI "$ARM_URL" >/dev/null && curl -sfLI "$INTEL_URL" >/dev/null; then
