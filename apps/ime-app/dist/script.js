@@ -4667,7 +4667,55 @@ async function clipboardRead() {
   return '';
 }
 
+// 선택 범위 양 끝이 동일한 .md-table 안에 있으면 그 표 요소를 반환,
+// 아니면 null. Cmd+C / native copy 가 sel.toString() 의 탭-구분 셀 펼침
+// 대신 표 마크다운 소스를 그대로 복사하기 위해 사용.
+function selectionTable() {
+  if (!markdownMode) return null;
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  const r = sel.getRangeAt(0);
+  if (!editor.contains(r.startContainer) || !editor.contains(r.endContainer)) return null;
+  const tableOf = (n) => {
+    let cur = n;
+    while (cur && cur !== editor) {
+      if (cur.nodeType === Node.ELEMENT_NODE
+          && cur.classList && cur.classList.contains('md-table')) return cur;
+      cur = cur.parentNode;
+    }
+    return null;
+  };
+  const a = tableOf(r.startContainer);
+  const b = tableOf(r.endContainer);
+  if (a && a === b) return a;
+  return null;
+}
+
+// 주어진 표 요소의 마크다운 소스 (헤더·구분선·본문 모든 행) 를 committed
+// 에서 슬라이스해 반환. 표 행이 없으면 빈 문자열.
+function tableSourceFromElement(table) {
+  if (!table) return '';
+  const rows = Array.from(table.querySelectorAll('tr.md-line.md-table-row'));
+  if (rows.length === 0) return '';
+  const firstS = sourceIdxAtLineStart(rows[0]);
+  const last = rows[rows.length - 1];
+  const lastE = sourceIdxAtLineStart(last) + lineSourceLength(last);
+  return committed.slice(firstS, lastE);
+}
+
 async function doCopy() {
+  // Markdown 모드에서 선택이 표 한 개 안에 머물러 있으면 그 표의
+  // 마크다운 소스 전체를 복사한다 (sel.toString() 은 탭-구분 cell 펼침을
+  // 줘서 paste 시 표 형태로 복원되지 않기 때문). 그 외엔 일반 텍스트 복사.
+  const tableEl = selectionTable();
+  if (tableEl) {
+    const src = tableSourceFromElement(tableEl);
+    if (src) {
+      const ok = await clipboardWrite(src);
+      logEvent(ok ? `표 복사됨 (${src.split('\n').length}줄)` : '표 복사 실패');
+      return ok;
+    }
+  }
   const sel = window.getSelection();
   const text = sel ? sel.toString().replace(/\u200b/g, '') : '';
   if (!text) {
@@ -4746,9 +4794,21 @@ function truncate(s, n) {
 
 // Filter the zero-width probe out of any native copy the browser
 // performs on its own (e.g. from a right-click menu).
+// \ucd94\uac00: \uc120\ud0dd\uc774 \ud45c \ud55c \uac1c \uc548\uc5d0 \uba38\ubb3c\ub7ec \uc788\uc73c\uba74 sel.toString() \uc758 \ud0ed-\uad6c\ubd84 cell
+// \ud3bc\uce68 \ub300\uc2e0 \ud45c \ub9c8\ud06c\ub2e4\uc6b4 \uc18c\uc2a4\ub97c \uadf8\ub300\ub85c \ud074\ub9bd\ubcf4\ub4dc\uc5d0 \uc4f4\ub2e4 (paste \uc2dc \ud45c\ub85c \ub2e4\uc2dc
+// \ub80c\ub354\ub418\ub3c4\ub85d).
 editor.addEventListener('copy', (ev) => {
   const sel = window.getSelection();
   if (!sel || !sel.toString()) return;
+  const tableEl = selectionTable();
+  if (tableEl) {
+    const src = tableSourceFromElement(tableEl);
+    if (src) {
+      ev.clipboardData?.setData('text/plain', src);
+      ev.preventDefault();
+      return;
+    }
+  }
   const text = sel.toString().replace(/\u200b/g, '');
   ev.clipboardData?.setData('text/plain', text);
   ev.preventDefault();
