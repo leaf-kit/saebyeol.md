@@ -5,8 +5,8 @@ cask "saebyeol" do
 
   # arch 별로 dmg 가 따로 빌드되므로 SHA256 도 둘로 분리한다. release CI 의
   # bump-cask-sha 잡이 새 태그마다 두 값을 모두 자동 갱신한다.
-  sha256 arm:   "b3b169b5d9257561eecdebb7ac5d259910577955b7dccddf571737a742019233",
-         intel: "dc53fddf99f6885867baea580a98d030cfdebd364a85509f44b86877802b3381"
+  sha256 arm:   "7b7ec866adddd894160def196648b44a57e79c3ee3ff048014386a07f3585280",
+         intel: "b9657aaf3c739bab9b316e918d7127d77deb2d482a1bfc8cba0ffa3b2fce4fb2"
 
   # productName "새별" 의 ASCII-sanitize 결과로 tauri 가 만든 dmg 자산은
   # `_#{version}_#{arch}.dmg` 형태로 prefix 가 비어 있지만, release 워크
@@ -27,12 +27,11 @@ cask "saebyeol" do
 
   app "새별.app"
 
-  # Apple Developer ID 코드사이닝/노터리제이션 전이라 첫 실행 시
-  # macOS Gatekeeper 가 경고를 띄운다. 그러나 quarantine 속성을 일부러
-  # 떼지 않고 그대로 두면, 사용자가 한 번 실행 시도 → 시스템 환경설정
-  # → 개인정보 보호 및 보안 → "차단했지만 그래도 열기" 를 통해 1회 승인
-  # 후 정상 실행할 수 있다. 빌드 측에서 ad-hoc 서명을 붙여 두었으므로
-  # 이 흐름이 정상적으로 동작한다.
+  # Developer ID Application (TeamID 54B4BWWQ57) 로 정식 서명되어 있다.
+  # Apple notary 노터리제이션은 아직 완료되지 않아 첫 실행 시 macOS
+  # Gatekeeper 가 "확인되지 않은 개발자" 경고를 띄울 수 있다. 사용자는
+  # Finder 에서 새별.app 우클릭 → "열기" 한 번이면 1회 승인 후 정상 실행
+  # 된다 (또는 시스템 설정 → 개인정보 보호 및 보안 → "그래도 열기").
 
   # 앱을 제거할 때 함께 청소할 사용자 데이터 — 설정·자동완성 사용자
   # 사전·학습된 n-gram·캐시.
