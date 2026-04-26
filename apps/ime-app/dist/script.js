@@ -7379,6 +7379,14 @@ editor.addEventListener('click', (ev) => {
     return;
   }
   syncCursorFromSelection();
+  // 표 빈 셀을 클릭하면 브라우저가 caret 을 td-element 의 좌측 가장자리
+  // (padding 밖) 에 두는 케이스가 있어, syncCursor 로 source 위치는 맞아도
+  // 시각적 caret 은 셀 바깥에 그대로 머문다. cursor 기준으로 DOM caret 을
+  // 재배치해 가장 가까운 텍스트 노드(빈 셀이라면 0길이 nudge) 위로 옮긴다.
+  if (markdownMode) {
+    const td = ev.target && ev.target.closest && ev.target.closest('td.md-cell');
+    if (td) placeCaretAtSourceIdx(cursor);
+  }
   updateCaretLineFromSelection();
   ensureCaretVisible();
   if (markdownMode) updateMdToolbar();
