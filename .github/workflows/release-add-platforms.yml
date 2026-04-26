@@ -89,7 +89,8 @@ jobs:
           TAG="${{ github.event.inputs.target_tag }}"
           VERSION="${TAG#v}"
           ARCH=amd64
-          ASSETS=("_${VERSION}_${ARCH}.deb" "_${VERSION}_${ARCH}.AppImage")
+          # rpm 은 빈 productName 시 `-${VERSION}-1.x86_64.rpm` 로 게시.
+          ASSETS=("_${VERSION}_${ARCH}.deb" "_${VERSION}_${ARCH}.AppImage" "-${VERSION}-1.x86_64.rpm")
           TMP=$(mktemp -d)
           for i in 1 2 3 4 5 6 7 8; do
             current=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' || true)
@@ -108,7 +109,11 @@ jobs:
             fi
             mv "$TMP/$OLD" "$TMP/$NEW"
             gh release upload "$TAG" "$TMP/$NEW" --repo "$GITHUB_REPOSITORY" --clobber
-            gh release delete-asset "$TAG" "$OLD" --repo "$GITHUB_REPOSITORY" --yes || true
+            # `-` 시작 자산명은 gh delete-asset 가 플래그로 오해해서 asset id 를 거쳐 API 로 삭제.
+            ASSET_ID=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq ".assets[] | select(.name == \"$OLD\") | .id" || true)
+            if [ -n "$ASSET_ID" ]; then
+              gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/assets/${ASSET_ID}" || true
+            fi
           done
 
   windows:
@@ -178,5 +183,9 @@ jobs:
             fi
             mv "$TMP/$OLD" "$TMP/$NEW"
             gh release upload "$TAG" "$TMP/$NEW" --repo "$GITHUB_REPOSITORY" --clobber
-            gh release delete-asset "$TAG" "$OLD" --repo "$GITHUB_REPOSITORY" --yes || true
+            # `-` 시작 자산명은 gh delete-asset 가 플래그로 오해해서 asset id 를 거쳐 API 로 삭제.
+            ASSET_ID=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq ".assets[] | select(.name == \"$OLD\") | .id" || true)
+            if [ -n "$ASSET_ID" ]; then
+              gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/assets/${ASSET_ID}" || true
+            fi
           done

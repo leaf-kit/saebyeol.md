@@ -70,7 +70,7 @@ brew untap leaf-kit/saebyeol.md               # tap 도 함께 정리
 
 수동 다운로드는 [Releases](https://github.com/leaf-kit/saebyeol.md/releases/latest) 에서 본인 Mac 의 아키텍처(Apple Silicon=`aarch64`, Intel=`x64`) 에 맞는 `saebyeol_<version>_<arch>.dmg` 를 받는다.
 
-### Linux — `.deb` (Debian · Ubuntu) 또는 `.AppImage` (배포판 무관)
+### Linux — `.deb` (Debian · Ubuntu) / `.rpm` (Fedora · RHEL · openSUSE) / `.AppImage` (배포판 무관)
 
 [Releases](https://github.com/leaf-kit/saebyeol.md/releases/latest) 에서 자산을 받아 설치한다 (현재는 `x86_64` 만 빌드).
 
@@ -80,6 +80,12 @@ curl -L -o saebyeol.deb \
   "https://github.com/leaf-kit/saebyeol.md/releases/latest/download/saebyeol_<version>_amd64.deb"
 sudo apt install ./saebyeol.deb        # 의존성(libwebkit2gtk-4.1-0 등) 자동 설치
 # 제거: sudo apt remove sb-md
+
+# Fedora / RHEL / openSUSE — .rpm 패키지
+curl -L -o saebyeol.rpm \
+  "https://github.com/leaf-kit/saebyeol.md/releases/latest/download/saebyeol-<version>-1.x86_64.rpm"
+sudo dnf install ./saebyeol.rpm         # 또는 sudo zypper install ./saebyeol.rpm
+# 제거: sudo dnf remove sb-md
 
 # 배포판 무관 — AppImage (chmod 후 더블클릭 또는 실행)
 curl -L -o 새별.AppImage \
@@ -278,7 +284,7 @@ git push origin v0.1.1
 
 1. **macOS** arm64 · x86_64 / **Linux** x86_64 / **Windows** x86_64 네 매트릭스로 release 빌드.
 2. macOS 한정 — Apple Developer ID 인증서로 `.app` 코드사이닝 + Apple 노터리 서비스 등록 + staple (시크릿 등록 시).
-3. `.dmg` · `.app.tar.gz` (mac), `.deb` · `.AppImage` (Linux), `-setup.exe` (Windows NSIS) 자산을 GitHub Release 에 업로드.
+3. `.dmg` · `.app.tar.gz` (mac), `.deb` · `.rpm` · `.AppImage` (Linux), `-setup.exe` (Windows NSIS) 자산을 GitHub Release 에 업로드.
 4. `Casks/saebyeol.rb` 의 버전·arch별 SHA256 을 자동 갱신해 main 에 커밋. `TAP_GITHUB_TOKEN` 시크릿이 있으면 별도 tap 저장소도 동시에 갱신.
 
 릴리스 후엔 기존 사용자가 다음 실행 시점부터 자동으로 새 버전을 안내받고, 첫 실행 Gatekeeper 경고도 사라진다.

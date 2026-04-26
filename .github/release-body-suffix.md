@@ -10,11 +10,14 @@ brew tap leaf-kit/saebyeol.md
 brew install --cask saebyeol
 ```
 
-### Linux — `.deb` 또는 `.AppImage`
+### Linux — `.deb` / `.rpm` / `.AppImage`
 
 ```bash
 # Debian / Ubuntu
 sudo apt install ./saebyeol_<version>_amd64.deb
+
+# Fedora / RHEL / openSUSE
+sudo dnf install ./saebyeol-<version>-1.x86_64.rpm
 
 # 배포판 무관 — AppImage
 chmod +x 새별.AppImage && ./새별.AppImage
@@ -37,6 +40,7 @@ chmod +x 새별.AppImage && ./새별.AppImage
 | macOS Apple Silicon | `saebyeol_<version>_aarch64.dmg` |
 | macOS Intel | `saebyeol_<version>_x64.dmg` |
 | Linux x86_64 (deb) | `saebyeol_<version>_amd64.deb` |
+| Linux x86_64 (rpm) | `saebyeol-<version>-1.x86_64.rpm` |
 | Linux x86_64 (AppImage) | `saebyeol_<version>_amd64.AppImage` |
 | Windows x86_64 (NSIS) | `saebyeol_<version>_x64-setup.exe` |
 

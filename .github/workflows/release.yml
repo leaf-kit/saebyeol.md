@@ -188,7 +188,12 @@ jobs:
               ;;
             x86_64-unknown-linux-gnu)
               ARCH=amd64
-              ASSETS=("_${VERSION}_${ARCH}.deb" "_${VERSION}_${ARCH}.AppImage")
+              # rpm 은 "<productName>-<version>-1.x86_64.rpm" 패턴이라 빈
+              # productName 의 경우 prefix 가 비어 있다 (`-0.1.2-1.x86_64.rpm`).
+              # gh delete-asset 가 `-` 시작 자산명을 플래그로 오해하므로
+              # 본 rename 단계에서 새 이름(`saebyeol-...`)으로 옮긴 뒤 옛
+              # 이름은 `gh api -X DELETE` 로 삭제한다.
+              ASSETS=("_${VERSION}_${ARCH}.deb" "_${VERSION}_${ARCH}.AppImage" "-${VERSION}-1.x86_64.rpm")
               ;;
             x86_64-pc-windows-msvc)
               ARCH=x64
@@ -212,6 +217,8 @@ jobs:
             sleep 8
           done
           # 다운로드 → 이름 앞에 saebyeol prepend → 재업로드 → 옛 자산 삭제.
+          # `-` 시작 자산(예: -${VERSION}-1.x86_64.rpm) 은 gh CLI 가 플래그로
+          # 오해하므로 옛 자산 삭제는 asset id 를 받아 `gh api -X DELETE` 로 한다.
           for OLD in "${ASSETS[@]}"; do
             NEW="saebyeol${OLD}"
             # 이미 prefix 가 붙은 상태로 생성된 환경(향후 productName 변경 등)
@@ -222,7 +229,10 @@ jobs:
             fi
             mv "$TMP/$OLD" "$TMP/$NEW"
             gh release upload "$TAG" "$TMP/$NEW" --repo "$GITHUB_REPOSITORY" --clobber
-            gh release delete-asset "$TAG" "$OLD" --repo "$GITHUB_REPOSITORY" --yes || true
+            ASSET_ID=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq ".assets[] | select(.name == \"$OLD\") | .id" || true)
+            if [ -n "$ASSET_ID" ]; then
+              gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/assets/${ASSET_ID}" || true
+            fi
           done
 
   bump-cask-sha:
