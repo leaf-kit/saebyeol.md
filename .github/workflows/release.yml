@@ -1,17 +1,22 @@
-# 태그를 `v*.*.*` 로 푸시하면 macOS arm64 / x64 양쪽으로 릴리스 빌드를
-# 만들고, 서명·번들 후 GitHub Release 에 dmg / app.tar.gz / app.tar.gz.sig
-# 그리고 Tauri updater 매니페스트(`latest.json`) 를 함께 업로드한다.
+# 태그를 `v*.*.*` 로 푸시하면 macOS arm64 / x64 + Linux x86_64 + Windows x86_64
+# 네 플랫폼으로 릴리스 빌드를 만들고, 서명·번들 후 GitHub Release 에
+# .dmg / .app.tar.gz / .deb / .AppImage / .msi / -setup.exe 자산과 Tauri
+# updater 매니페스트(`latest.json`) 를 함께 업로드한다.
 #
 # 사전 준비 (저장소 Secrets):
 #   TAURI_SIGNING_PRIVATE_KEY           — `cargo tauri signer generate` 산출물
 #   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  — 위 키 생성 시 입력한 비밀번호
 #
-# 선택 사항:
+# 선택 사항 (macOS 코드사이닝·노터리제이션):
 #   APPLE_CERTIFICATE / APPLE_CERTIFICATE_PASSWORD / APPLE_SIGNING_IDENTITY
 #   APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID
-#       → 채워 넣으면 코드사이닝 + 노터리제이션 까지 진행. 비워두면
-#         첫 실행 시 macOS Gatekeeper 가 "확인되지 않은 개발자" 경고를
-#         띄울 수 있으나 cask 다운로드/설치 자체는 동작한다.
+#       → 채워 넣으면 macOS 빌드만 코드사이닝 + 노터리제이션 까지 진행.
+#         비워두면 첫 실행 시 macOS Gatekeeper 가 "확인되지 않은 개발자"
+#         경고를 띄울 수 있다. Linux/Windows 빌드와는 무관.
+#
+# Windows Authenticode 서명은 본 워크플로 범위 밖이며, 미서명 NSIS/MSI 가
+# 게시된다 → 첫 실행 시 SmartScreen 경고가 나타날 수 있다 (사용자가 "추가 정보 → 실행" 으로 1회 승인 가능).
+# Linux 자산은 unsigned (apt 서명 저장소를 별도로 운영하지 않는다).
 
 name: Release
 
@@ -34,6 +39,12 @@ jobs:
           - platform: macos-latest
             target: x86_64-apple-darwin
             args: --target x86_64-apple-darwin
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            args: --target x86_64-unknown-linux-gnu
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            args: --target x86_64-pc-windows-msvc
 
     runs-on: ${{ matrix.platform }}
     env:
@@ -43,6 +54,22 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies (GTK · WebKitGTK · AppIndicator)
+        # Tauri 2 의 Linux 백엔드는 webkit2gtk-4.1 + GTK3 + libayatana-appindicator
+        # 헤더가 필요하다. cargo test (워크스페이스 빌드) 시점부터 링크되므로
+        # 테스트 단계 이전에 설치해야 한다. patchelf 와 librsvg2 는 AppImage
+        # 번들링에 사용된다.
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -60,8 +87,11 @@ jobs:
       - name: Compose release body from CHANGELOG.md
         # 태그명(`v0.1.0`) 과 일치하는 `## v0.1.0` 헤딩부터 다음 `## v` 까지를
         # CHANGELOG.md 에서 잘라 내고, 그 뒤에 설치/자동 업데이트 안내를
-        # 붙여 GitHub Release 본문으로 사용한다.
+        # 붙여 GitHub Release 본문으로 사용한다. macOS · Linux · Windows
+        # 어느 매트릭스에서 먼저 본문을 만들어도 동일한 결과가 나오므로
+        # 각 잡이 자기 본문을 만들어 tauri-action 에 넘기는 형태가 안전하다.
         id: notes
+        shell: bash
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
@@ -92,9 +122,10 @@ jobs:
       # $GITHUB_ENV 에 주입한다. 빈 시크릿이 그대로 env 로 흘러가면
       # tauri-action 이 빈 PKCS12 import 를 시도하다 실패하므로, 시크릿
       # 부재 시엔 아예 변수 자체가 없어야 한다 (그러면 tauri.conf.json 의
-      # signingIdentity "-" 가 적용되어 ad-hoc 서명으로 통과).
-      - name: Set Apple signing env (시크릿 등록된 경우만)
-        if: env.HAS_APPLE_CERT == 'true'
+      # signingIdentity "-" 가 적용되어 ad-hoc 서명으로 통과). Linux/
+      # Windows 러너에는 의미가 없으므로 macOS 한정으로만 주입한다.
+      - name: Set Apple signing env (시크릿 등록된 경우만, macOS 한정)
+        if: runner.os == 'macOS' && env.HAS_APPLE_CERT == 'true'
         env:
           A_CERT: ${{ secrets.APPLE_CERTIFICATE }}
           A_PWD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -130,12 +161,13 @@ jobs:
           updaterJsonPreferNsis: false
           args: ${{ matrix.args }}
 
-      - name: Rename release assets — `_*.{dmg,app.tar.gz}` → `saebyeol_*`
-        # productName "새별" 의 ASCII-sanitize 결과로 dmg/app.tar.gz 자산명
-        # prefix 가 비어 있는 (`_${version}_${arch}.dmg`) 형태로 게시된다.
-        # 사용자에게 보이는 다운로드 이름이 깔끔하도록 saebyeol_ prefix 로
-        # 다시 업로드하고 옛 이름은 삭제한다. matrix 가 arch 별로 돌므로
-        # 각 잡은 자기 arch 자산만 처리해 race 를 피한다.
+      - name: Rename release assets — `_*` → `saebyeol_*`
+        # productName "새별" 의 ASCII-sanitize 결과로 자산명 prefix 가
+        # 비어 있는 (`_${version}_${arch}.<ext>`) 형태로 게시된다. 사용자에게
+        # 보이는 다운로드 이름이 깔끔하도록 saebyeol_ prefix 로 다시
+        # 업로드하고 옛 이름은 삭제한다. matrix 가 (target, platform) 별로
+        # 돌므로 각 잡은 자기 자산만 처리해 race 를 피한다.
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -143,24 +175,47 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           VERSION="${TAG#v}"
           case "${{ matrix.target }}" in
-            aarch64-apple-darwin) ARCH=aarch64 ;;
-            x86_64-apple-darwin)  ARCH=x64 ;;
-            *) echo "::error::unknown matrix target ${{ matrix.target }}"; exit 1 ;;
+            aarch64-apple-darwin)
+              ARCH=aarch64
+              ASSETS=("_${VERSION}_${ARCH}.dmg" "_${ARCH}.app.tar.gz")
+              ;;
+            x86_64-apple-darwin)
+              ARCH=x64
+              ASSETS=("_${VERSION}_${ARCH}.dmg" "_${ARCH}.app.tar.gz")
+              ;;
+            x86_64-unknown-linux-gnu)
+              ARCH=amd64
+              ASSETS=("_${VERSION}_${ARCH}.deb" "_${VERSION}_${ARCH}.AppImage")
+              ;;
+            x86_64-pc-windows-msvc)
+              ARCH=x64
+              ASSETS=("_${VERSION}_${ARCH}-setup.exe" "_${VERSION}_${ARCH}_en-US.msi")
+              ;;
+            *)
+              echo "::error::unknown matrix target ${{ matrix.target }}"
+              exit 1
+              ;;
           esac
           TMP=$(mktemp -d)
-          # 자산이 게시되기까지 잠시 대기.
-          for i in 1 2 3 4 5 6; do
-            assets=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' || true)
-            if echo "$assets" | grep -q "^_${VERSION}_${ARCH}\.dmg$" \
-               && echo "$assets" | grep -q "^_${ARCH}\.app\.tar\.gz$"; then
-              break
-            fi
+          # 자산이 게시되기까지 잠시 대기 (각 매트릭스 잡이 자기 자산만 검사).
+          for i in 1 2 3 4 5 6 7 8; do
+            current=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' || true)
+            ALL_PRESENT=1
+            for OLD in "${ASSETS[@]}"; do
+              echo "$current" | grep -q "^${OLD}$" || ALL_PRESENT=0
+            done
+            [ "$ALL_PRESENT" = "1" ] && break
             sleep 8
           done
           # 다운로드 → 이름 앞에 saebyeol prepend → 재업로드 → 옛 자산 삭제.
-          for OLD in "_${VERSION}_${ARCH}.dmg" "_${ARCH}.app.tar.gz"; do
+          for OLD in "${ASSETS[@]}"; do
             NEW="saebyeol${OLD}"
-            gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$OLD" -D "$TMP" --clobber
+            # 이미 prefix 가 붙은 상태로 생성된 환경(향후 productName 변경 등)
+            # 에서는 OLD 가 존재하지 않을 수 있으므로 download 단계는 best-effort.
+            if ! gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$OLD" -D "$TMP" --clobber 2>/dev/null; then
+              echo "skip rename: $OLD (자산 없음)"
+              continue
+            fi
             mv "$TMP/$OLD" "$TMP/$NEW"
             gh release upload "$TAG" "$TMP/$NEW" --repo "$GITHUB_REPOSITORY" --clobber
             gh release delete-asset "$TAG" "$OLD" --repo "$GITHUB_REPOSITORY" --yes || true
@@ -168,6 +223,9 @@ jobs:
 
   bump-cask-sha:
     needs: publish-tauri
+    # macOS 외 플랫폼이 실패해도 mac dmg 가 게시됐다면 cask 는 갱신되어야
+    # 하므로 always() 로 의존을 느슨하게 한다 (cask 는 macOS 한정 채널).
+    if: ${{ always() && needs.publish-tauri.result != 'cancelled' }}
     runs-on: macos-latest
     permissions:
       contents: write
@@ -189,12 +247,19 @@ jobs:
           ARM_URL="https://github.com/leaf-kit/saebyeol.md/releases/download/${TAG}/saebyeol_${VERSION}_aarch64.dmg"
           INTEL_URL="https://github.com/leaf-kit/saebyeol.md/releases/download/${TAG}/saebyeol_${VERSION}_x64.dmg"
           # 두 자산이 모두 게시되기까지 잠시 기다린다 (CDN 반영 대기).
-          for i in 1 2 3 4 5 6; do
+          # macOS 매트릭스가 실패한 경우엔 끝까지 안 떠도 명확히 종료한다.
+          OK=0
+          for i in 1 2 3 4 5 6 7 8; do
             if curl -sfLI "$ARM_URL" >/dev/null && curl -sfLI "$INTEL_URL" >/dev/null; then
+              OK=1
               break
             fi
             sleep 10
           done
+          if [ "$OK" != "1" ]; then
+            echo "::warning::macOS dmg 자산을 찾을 수 없어 cask 갱신을 건너뜁니다."
+            exit 0
+          fi
           ARM_SHA=$(curl -sfL "$ARM_URL" | shasum -a 256 | awk '{print $1}')
           INTEL_SHA=$(curl -sfL "$INTEL_URL" | shasum -a 256 | awk '{print $1}')
           if [ -z "$ARM_SHA" ] || [ -z "$INTEL_SHA" ]; then

@@ -7,7 +7,7 @@
 [![Rust](https://img.shields.io/badge/Rust-1.75%2B-orange?logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![Tauri](https://img.shields.io/badge/Tauri-2.x-24C8DB?logo=tauri&logoColor=white)](https://tauri.app)
 [![License](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-green.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey?logo=apple&logoColor=white)](#install)
+[![Platform](https://img.shields.io/badge/Platform-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-lightgrey?logo=desktop&logoColor=white)](#install)
 [![Version](https://img.shields.io/badge/Version-v0.1.0-blue.svg)](#)
 [![Code Style](https://img.shields.io/badge/Lints-pedantic%20%2B%20deny%20unsafe-purple.svg)](#)
 [![Homepage](https://img.shields.io/badge/Homepage-leaf--kit.github.io%2Fsaebyeol-success?logo=github)](https://leaf-kit.github.io/saebyeol/)
@@ -18,7 +18,7 @@
 
 ## 한 줄 소개
 
-세벌식 최종·두벌식·모아치기를 모두 지원하는 자체 한글 IME 위에서 동작하는, Rust + Tauri 기반의 가벼운 macOS 마크다운 에디터.
+세벌식 최종·두벌식·모아치기를 모두 지원하는 자체 한글 IME 위에서 동작하는, Rust + Tauri 기반의 가벼운 데스크톱 마크다운 에디터 (macOS · Linux · Windows).
 
 > **자세한 소개·스크린샷·사용 가이드는 공식 페이지에서 확인하세요 →
 > https://leaf-kit.github.io/saebyeol/**
@@ -53,35 +53,64 @@
 
 ## Install
 
-### Homebrew Cask (권장)
+### macOS — Homebrew Cask (권장)
 
 ```bash
 brew tap leaf-kit/saebyeol.md
 brew install --cask saebyeol
 ```
 
-### 업데이트
+업데이트·제거:
 
 ```bash
-brew update
-brew upgrade --cask saebyeol
+brew update && brew upgrade --cask saebyeol   # 업데이트
+brew uninstall --cask saebyeol                # 제거
+brew untap leaf-kit/saebyeol.md               # tap 도 함께 정리
 ```
 
-### 제거
+수동 다운로드는 [Releases](https://github.com/leaf-kit/saebyeol.md/releases/latest) 에서 본인 Mac 의 아키텍처(Apple Silicon=`aarch64`, Intel=`x64`) 에 맞는 `saebyeol_<version>_<arch>.dmg` 를 받는다.
+
+### Linux — `.deb` (Debian · Ubuntu) 또는 `.AppImage` (배포판 무관)
+
+[Releases](https://github.com/leaf-kit/saebyeol.md/releases/latest) 에서 자산을 받아 설치한다 (현재는 `x86_64` 만 빌드).
 
 ```bash
-brew uninstall --cask saebyeol
-brew untap leaf-kit/saebyeol.md
+# Debian / Ubuntu — .deb 패키지
+curl -L -o saebyeol.deb \
+  "https://github.com/leaf-kit/saebyeol.md/releases/latest/download/saebyeol_<version>_amd64.deb"
+sudo apt install ./saebyeol.deb        # 의존성(libwebkit2gtk-4.1-0 등) 자동 설치
+# 제거: sudo apt remove sb-md
+
+# 배포판 무관 — AppImage (chmod 후 더블클릭 또는 실행)
+curl -L -o 새별.AppImage \
+  "https://github.com/leaf-kit/saebyeol.md/releases/latest/download/saebyeol_<version>_amd64.AppImage"
+chmod +x 새별.AppImage
+./새별.AppImage
 ```
 
-### 소스에서 빌드
+> **Linux 런타임 의존성** — `.deb` 는 apt 가 알아서 채우지만 AppImage 는 시스템에 `webkit2gtk-4.1` (Ubuntu 24.04+ 기본) 이 필요하다. Ubuntu 22.04 등에선 `sudo apt install libwebkit2gtk-4.1-0 libayatana-appindicator3-1` 이 필요할 수 있다.
+
+### Windows — NSIS Setup (권장) 또는 MSI
+
+[Releases](https://github.com/leaf-kit/saebyeol.md/releases/latest) 에서 받아 더블클릭으로 설치 (현재는 `x64` 만 빌드).
+
+| 자산 | 용도 |
+|------|------|
+| `saebyeol_<version>_x64-setup.exe` | NSIS 설치 마법사. 일반 사용자에게 권장. |
+| `saebyeol_<version>_x64_en-US.msi` | MSI 패키지. 그룹 정책·MDM 배포 용. |
+
+> **첫 실행 시 SmartScreen 경고 (1회)** — Windows 빌드는 아직 Authenticode 코드사이닝 전이라 처음 실행할 때 *"PC를 보호했습니다"* 메시지가 뜬다. **추가 정보 → 실행** 한 번이면 이후엔 더블클릭만으로 동작한다.
+
+### 소스에서 빌드 (모든 플랫폼)
 
 ```bash
 git clone https://github.com/leaf-kit/saebyeol.md
 cd saebyeol.md
 cargo install tauri-cli --version '^2.0' --locked
-./manage.sh build-app   # release 번들 생성 (.app)
+./manage.sh build-app   # release 번들 생성 (.app · .deb · .AppImage · .msi · -setup.exe — 호스트 OS 기준)
 ```
+
+Linux 호스트에선 사전에 `sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf` 필요. Windows 호스트에선 [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) 과 MSVC 빌드 도구 필요.
 
 ### 첫 실행 시 macOS 보안 경고 (1회만)
 
@@ -168,9 +197,12 @@ saebyeol.md/
 
 ## 요구사항
 
-- Rust 1.75 이상 (`rustup` 권장)
-- macOS 11 (Big Sur) 이상
-- Tauri CLI 2.x — `cargo install tauri-cli --version '^2.0' --locked`
+| 항목 | macOS | Linux | Windows |
+|------|-------|-------|---------|
+| OS | 11 (Big Sur) 이상 | webkit2gtk-4.1 가 깔리는 배포판 (Ubuntu 22.04+, Debian 12+, Fedora 39+ 등) | 10 1809+ / 11. WebView2 Runtime 자동 설치 |
+| 아키텍처 | `aarch64` (Apple Silicon) · `x86_64` (Intel) | `x86_64` | `x86_64` |
+| Rust 빌드 | 1.75+ (`rustup` 권장) | 1.75+ + GTK/WebKit dev 헤더 | 1.75+ + MSVC 빌드 도구 |
+| Tauri CLI | `cargo install tauri-cli --version '^2.0' --locked` (모든 OS 공통) | | |
 
 ---
 
@@ -247,9 +279,9 @@ git push origin v0.1.1
 
 `.github/workflows/release.yml` 이 자동으로:
 
-1. arm64 · x86_64 양 아키텍처로 release 빌드.
-2. Apple Developer ID 인증서로 `.app` 코드사이닝 + Apple 노터리 서비스 등록 + staple.
-3. `.dmg`, `.app.tar.gz` 등을 GitHub Release 에 업로드.
+1. **macOS** arm64 · x86_64 / **Linux** x86_64 / **Windows** x86_64 네 매트릭스로 release 빌드.
+2. macOS 한정 — Apple Developer ID 인증서로 `.app` 코드사이닝 + Apple 노터리 서비스 등록 + staple (시크릿 등록 시).
+3. `.dmg` · `.app.tar.gz` (mac), `.deb` · `.AppImage` (Linux), `-setup.exe` · `.msi` (Windows) 자산을 GitHub Release 에 업로드.
 4. `Casks/saebyeol.rb` 의 버전·arch별 SHA256 을 자동 갱신해 main 에 커밋. `TAP_GITHUB_TOKEN` 시크릿이 있으면 별도 tap 저장소도 동시에 갱신.
 
 릴리스 후엔 기존 사용자가 다음 실행 시점부터 자동으로 새 버전을 안내받고, 첫 실행 Gatekeeper 경고도 사라진다.

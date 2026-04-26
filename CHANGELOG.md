@@ -3,6 +3,34 @@
 본 파일은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/) 형식을 따르며,
 버전은 [SemVer](https://semver.org/lang/ko/) 를 따른다. 모든 항목은 한글로 작성한다.
 
+## v0.2.0 — TBD
+
+macOS 단일 배포에서 **macOS · Linux · Windows 3-OS 동시 배포** 로 확장한 마이너 릴리스. macOS 빌드 자체는 v0.1.2 와 기능적으로 동일하다.
+
+### 다중 OS 빌드 매트릭스
+- `.github/workflows/release.yml` 의 매트릭스에 `ubuntu-22.04` (Linux x86_64) 와 `windows-latest` (Windows x86_64) 추가. 기존 macOS arm64 · x86_64 와 합쳐 4개 native 러너에서 병렬 빌드.
+- Linux 러너에 GTK3 · WebKitGTK 4.1 · libayatana-appindicator · librsvg2 · patchelf 자동 설치.
+- Apple Developer ID 코드사이닝·노터리제이션 단계는 `runner.os == 'macOS'` 한정 (Linux/Windows 러너로 시크릿 누출 방지).
+- 자산 rename 단계가 4개 플랫폼의 sanitized 파일명을 모두 처리해 사용자에게 보이는 이름이 `saebyeol_<version>_<arch>.<ext>` 로 통일됨.
+- `bump-cask-sha` 잡은 macOS 외 플랫폼이 실패해도 mac dmg 만 게시되면 cask 를 갱신하도록 `if: always()` 로 의존을 느슨하게 조정.
+
+### 새 배포 자산
+| OS | 자산 | 비고 |
+|----|------|------|
+| Linux x86_64 | `saebyeol_<version>_amd64.deb` | Debian / Ubuntu apt 호환 |
+| Linux x86_64 | `saebyeol_<version>_amd64.AppImage` | 배포판 무관, 실행 권한만 부여하면 됨 |
+| Windows x86_64 | `saebyeol_<version>_x64-setup.exe` | NSIS 설치 마법사, 일반 사용자용 |
+| Windows x86_64 | `saebyeol_<version>_x64_en-US.msi` | MSI 패키지, MDM·그룹 정책 배포용 |
+
+### Windows 첫 실행 안내
+- 본 릴리스는 Authenticode 코드사이닝 전이라 첫 실행 시 SmartScreen 의 *"PC를 보호했습니다"* 경고가 뜰 수 있다. **추가 정보 → 실행** 한 번이면 이후엔 더블클릭만으로 동작.
+
+### 문서
+- `README.md` — Platform 뱃지 multi-OS, Linux/Windows 설치·실행 절차, 요구사항 표 추가.
+- `.github/release-body-suffix.md` — 3-OS 직접 다운로드 표·OS별 첫 실행 보안 경고 안내 추가.
+
+[v0.2.0]: https://github.com/leaf-kit/saebyeol.md/releases/tag/v0.2.0
+
 ## v0.1.2 — 2026-04-26
 
 v0.1.1 자산에 정식 Developer ID Application 서명을 적용한 핫픽스 릴리스. 기능 변경은 없다.
