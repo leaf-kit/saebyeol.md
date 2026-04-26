@@ -2869,6 +2869,32 @@ function domToSourceIdx(node, offset) {
         if (cur.nodeType === Node.TEXT_NODE) {
           return acc + inLine + offset;
         }
+        // 빈 표 셀(td.md-cell) 의 element-level 캐럿 스냅.
+        // body 셀이 비어 있으면 td 의 모든 자식이 display:none 인 .md-pipe
+        // 또는 0길이 텍스트라, 셀을 클릭했을 때 브라우저가 td 자체에 caret
+        // 을 두는 경우가 있다. 일반 element 분기는 offset 0 → 라인 시작
+        // (= 첫 파이프 앞) 으로 매핑돼, 사용자가 입력하면 행의 leading | 보다
+        // 앞에 글자가 끼어 표 구조가 깨진다. 셀 안쪽(leading pipe 직후) 으로
+        // 스냅해 입력이 셀 안에 정확히 들어가도록.
+        if (cur.nodeType === Node.ELEMENT_NODE
+            && cur.classList && cur.classList.contains('md-cell')) {
+          let withinLine = 0;
+          // 같은 행의 앞쪽 셀들의 소스 기여분 합.
+          let sib = cur.previousElementSibling;
+          while (sib && sib.classList && sib.classList.contains('md-cell')) {
+            withinLine = childSourceLength(sib) + withinLine;
+            sib = sib.previousElementSibling;
+          }
+          // 이 셀의 leading 부분(필요시 들여쓰기 텍스트 + leading .md-pipe) 까지 누적.
+          for (const child of cur.childNodes) {
+            withinLine += childSourceLength(child);
+            if (child.nodeType === Node.ELEMENT_NODE
+                && child.classList && child.classList.contains('md-pipe')) {
+              break; // leading pipe 직후가 셀 안쪽 시작점
+            }
+          }
+          return acc + withinLine;
+        }
         // Element node — `offset` is a child index, so sum text lengths
         // of children up to that index. We stop the walker here; we do
         // NOT descend into `cur`'s subtree (counting it via childNodes
