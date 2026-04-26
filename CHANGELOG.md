@@ -3,7 +3,7 @@
 본 파일은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/) 형식을 따르며,
 버전은 [SemVer](https://semver.org/lang/ko/) 를 따른다. 모든 항목은 한글로 작성한다.
 
-## v0.2.0 — TBD
+## v0.2.0 — 2026-04-26
 
 macOS 단일 배포에서 **macOS · Linux · Windows 3-OS 동시 배포** 로 확장한 마이너 릴리스. macOS 빌드 자체는 v0.1.2 와 기능적으로 동일하다.
 
