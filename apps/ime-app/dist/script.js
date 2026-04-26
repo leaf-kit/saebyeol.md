@@ -4782,15 +4782,16 @@ function tabularTextToMarkdownTable(text) {
 }
 
 async function doCopy() {
-  // Markdown 모드에서 선택이 표 한 개 안에 머물러 있으면 그 표의
-  // 마크다운 소스 전체를 복사한다 (sel.toString() 은 탭-구분 cell 펼침을
-  // 줘서 paste 시 표 형태로 복원되지 않기 때문). 그 외엔 일반 텍스트 복사.
-  const tableEl = selectionTable();
-  if (tableEl) {
-    const src = tableSourceFromElement(tableEl);
-    if (src) {
+  // Markdown 모드: selection 을 committed 인덱스 범위로 변환해 그 슬라이스
+  // (= 정확한 마크다운 소스) 를 그대로 복사한다. 표 안 선택이든 표 전체
+  // 선택이든 표 + 주변 텍스트 선택이든 모두 동일하게 처리되며, paste 시
+  // renderer 가 마크다운 표 문법을 다시 인식해 표로 렌더한다.
+  if (markdownMode) {
+    const range = selectionInCommitted();
+    if (range && range[0] !== range[1]) {
+      const src = committed.slice(range[0], range[1]);
       const ok = await clipboardWrite(src);
-      logEvent(ok ? `표 복사됨 (${src.split('\n').length}줄)` : '표 복사 실패');
+      logEvent(ok ? `복사됨 (${src.length}자, ${truncate(src, 30)})` : '복사 실패');
       return ok;
     }
   }
@@ -4800,23 +4801,37 @@ async function doCopy() {
     logEvent('복사할 선택 영역이 없습니다');
     return false;
   }
-  // 폴백 — selectionTable 이 표를 잡지 못한 케이스 (예: Cmd+A 로 양 끝이
-  // editor 자체) 에도, sel.toString() 결과가 탭-구분 다중 행이면 표 평탄화
-  // 결과로 보고 마크다운 표 문법으로 재구성해 paste 시 표로 다시 렌더되게 한다.
-  if (markdownMode && /\t/.test(text) && /\n/.test(text)) {
-    const restored = tabularTextToMarkdownTable(text);
-    if (restored !== text) {
-      const ok2 = await clipboardWrite(restored);
-      logEvent(ok2 ? `표 복사됨 (탭-구분 → 마크다운 ${restored.split('\n').length}줄)` : '표 복사 실패');
-      return ok2;
-    }
-  }
   const ok = await clipboardWrite(text);
   logEvent(ok ? `복사됨: "${truncate(text, 30)}"` : '복사 실패');
   return ok;
 }
 
 async function doCut() {
+  // Markdown 모드: selection 의 마크다운 소스 슬라이스를 클립보드에 쓰고
+  // 같은 범위를 committed 에서 삭제. 표든 텍스트든 동일하게 처리되어
+  // 잘라낸 표를 다른 위치에 paste 하면 다시 표로 렌더된다.
+  if (markdownMode) {
+    const range = selectionInCommitted();
+    if (range && range[0] !== range[1]) {
+      const src = committed.slice(range[0], range[1]);
+      const ok = await clipboardWrite(src);
+      if (!ok) {
+        logEvent('잘라내기 실패 (클립보드 접근 불가)');
+        return;
+      }
+      snapshot();
+      committed = committed.slice(0, range[0]) + committed.slice(range[1]);
+      cursor = range[0];
+      if (preedit) {
+        preedit = '';
+        await invoke('cancel_composition').catch(() => null);
+      }
+      render();
+      updateSuggestions([]);
+      logEvent(`잘라냄: "${truncate(src, 30)}"`);
+      return;
+    }
+  }
   const sel = window.getSelection();
   const text = sel ? sel.toString().replace(/\u200b/g, '') : '';
   if (!text) {
@@ -4889,27 +4904,19 @@ function truncate(s, n) {
 editor.addEventListener('copy', (ev) => {
   const sel = window.getSelection();
   if (!sel || !sel.toString()) return;
-  const tableEl = selectionTable();
-  if (tableEl) {
-    const src = tableSourceFromElement(tableEl);
-    if (src) {
+  // Markdown 모드: selection 을 committed 인덱스 범위로 변환해 그 슬라이스
+  // (= 정확한 마크다운 소스) 를 직접 클립보드에 쓴다. 표든 텍스트든 동일한
+  // 흐름이며 paste 시 renderer 가 마크다운 표 문법을 인식해 표로 다시 렌더.
+  if (markdownMode) {
+    const range = selectionInCommitted();
+    if (range && range[0] !== range[1]) {
+      const src = committed.slice(range[0], range[1]);
       ev.clipboardData?.setData('text/plain', src);
       ev.preventDefault();
       return;
     }
   }
-  // \ud3f4\ubc31 \u2014 Cmd+A \ub4f1\uc73c\ub85c \uc591 \ub05d\uc774 editor \uc790\uccb4\ub77c selectionTable \uc774 null \uc774\uc5b4\ub3c4
-  // sel.toString() \uacb0\uacfc\uac00 \ud0ed-\uad6c\ubd84 \ub2e4\uc911 \ud589 (\ube0c\ub77c\uc6b0\uc800\uac00 \ud45c\ub97c \ud3c9\ud0c4\ud654\ud55c \uacb0\uacfc) \uc774\uba74
-  // \ub9c8\ud06c\ub2e4\uc6b4 \ud45c \ubb38\ubc95\uc73c\ub85c \uc7ac\uad6c\uc131\ud574 paste \uc2dc \ud45c\ub85c \ub2e4\uc2dc \ub80c\ub354\ub418\ub3c4\ub85d.
-  const rawText = sel.toString().replace(/\u200b/g, '');
-  if (markdownMode && /\t/.test(rawText) && /\n/.test(rawText)) {
-    const restored = tabularTextToMarkdownTable(rawText);
-    if (restored !== rawText) {
-      ev.clipboardData?.setData('text/plain', restored);
-      ev.preventDefault();
-      return;
-    }
-  }
+  // Plain (non-markdown) \ubaa8\ub4dc \u2014 sel.toString() \uadf8\ub300\ub85c, zero-width probe \uc81c\uac70.
   const text = sel.toString().replace(/\u200b/g, '');
   ev.clipboardData?.setData('text/plain', text);
   ev.preventDefault();
