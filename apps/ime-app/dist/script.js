@@ -2920,12 +2920,15 @@ function measureDomText(n) {
 }
 
 function insertPreeditAtSourceIdx(root, idx, text) {
-  // Walk top-level .md-line blocks, drill into the one containing idx.
+  // 표 행은 진짜 <tr class="md-line.md-table-row"> 라 root 의 직접 자식이
+  // 아니라 <table><tbody> 손자다. root.children 만 순회하면 표 행이 모두
+  // 누락돼 preedit 이 표 바깥(루트 끝) 에 떨어지므로, querySelectorAll 로
+  // 모든 .md-line 을 문서 순서로 모은다. 일반 라인(.md-line div) 과 표 행
+  // (.md-line tr) 모두 leaf md-line 이라 중복 매치는 없다.
+  const blocks = root.querySelectorAll('.md-line');
   let acc = 0;
-  const blocks = root.children;
   for (let i = 0; i < blocks.length; i++) {
     const b = blocks[i];
-    if (!b.classList || !b.classList.contains('md-line')) continue;
     const len = lineSourceLength(b);
     if (idx <= acc + len) {
       insertPreeditInBlock(b, idx - acc, text);
@@ -2933,10 +2936,10 @@ function insertPreeditAtSourceIdx(root, idx, text) {
     }
     acc += len + 1;
   }
-  // Past end — append to last block.
-  const last = blocks[blocks.length - 1];
+  // Past end — append to last block (있으면 그 안에, 없으면 root 에).
+  const last = blocks.length ? blocks[blocks.length - 1] : null;
   const pe = makePreedit(text);
-  if (last && last.classList && last.classList.contains('md-line')) last.appendChild(pe);
+  if (last) last.appendChild(pe);
   else root.appendChild(pe);
 }
 
@@ -3074,6 +3077,83 @@ function tryImageCaretStopDown() {
   if (!img || img.classList.contains('broken')) return false;
   selectImage(img);
   img.scrollIntoView({ block: 'nearest' });
+  return true;
+}
+
+// 표 셀 간 위/아래 방향키 네비게이션. caret 이 td.md-cell 안에 있으면
+// 같은 column index 의 인접 행 셀로 이동하고 cursor 변수도 동기화한다.
+// 인접 행이 .md-table-sep(구분선, display:none) 이면 그 다음 행을 본다.
+// caret 이 표 안에 없거나 인접 행이 없으면 false 를 반환해 호출자가
+// 브라우저 기본 동작에 맡기도록 한다.
+function tryTableArrowNav(direction) {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) return false;
+  const r = sel.getRangeAt(0);
+  if (!editor.contains(r.startContainer)) return false;
+  // td.md-cell 조상 찾기.
+  let cell = r.startContainer;
+  if (cell.nodeType === Node.TEXT_NODE) cell = cell.parentNode;
+  while (cell && cell !== editor) {
+    if (cell.nodeType === Node.ELEMENT_NODE
+        && cell.classList && cell.classList.contains('md-cell')) break;
+    cell = cell.parentNode;
+  }
+  if (!cell || cell === editor) return false;
+  const tr = cell.parentNode;
+  if (!tr || !tr.classList || !tr.classList.contains('md-table-row')) return false;
+  // 같은 column index.
+  const colIdx = Array.prototype.indexOf.call(tr.children, cell);
+  if (colIdx < 0) return false;
+  // 인접 행 (구분선 건너뜀).
+  let target = direction === 'up' ? tr.previousElementSibling : tr.nextElementSibling;
+  while (target && target.classList && target.classList.contains('md-table-sep')) {
+    target = direction === 'up' ? target.previousElementSibling : target.nextElementSibling;
+  }
+  if (!target || !target.classList || !target.classList.contains('md-table-row')) {
+    return false; // 표 위/아래 끝 — 브라우저가 표 밖으로 caret 을 빼낸다.
+  }
+  const targetCell = target.children[colIdx];
+  if (!targetCell || !targetCell.classList || !targetCell.classList.contains('md-cell')) {
+    return false;
+  }
+  // 가능하면 같은 x 좌표 부근으로 caret 정렬, 폴백은 타깃 셀 끝.
+  const range = document.createRange();
+  let placed = false;
+  const cr = caretRect();
+  if (cr && document.caretRangeFromPoint) {
+    const tRect = targetCell.getBoundingClientRect();
+    const x = Math.max(tRect.left + 1, Math.min(cr.left, tRect.right - 1));
+    const y = tRect.top + tRect.height / 2;
+    const fromPoint = document.caretRangeFromPoint(x, y);
+    if (fromPoint && targetCell.contains(fromPoint.startContainer)) {
+      range.setStart(fromPoint.startContainer, fromPoint.startOffset);
+      placed = true;
+    }
+  }
+  if (!placed) {
+    // 셀의 마지막 텍스트 노드 끝 (없으면 셀 자체의 끝).
+    const walker = document.createTreeWalker(targetCell, NodeFilter.SHOW_TEXT, {
+      acceptNode(n) {
+        if (isNodeInsideExcluded(n)) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+    let lastText = null;
+    let n;
+    while ((n = walker.nextNode())) lastText = n;
+    if (lastText) {
+      range.setStart(lastText, lastText.nodeValue.length);
+    } else {
+      range.setStart(targetCell, targetCell.childNodes.length);
+    }
+  }
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+  // cursor 변수 동기화.
+  const idx = domToSourceIdx(range.startContainer, range.startOffset);
+  if (typeof idx === 'number') cursor = idx;
+  ensureCaretVisible();
   return true;
 }
 
@@ -3828,6 +3908,19 @@ editor.addEventListener('keydown', async (ev) => {
       return;
     }
     if (ev.code === 'ArrowDown' && tryImageCaretStopDown()) {
+      ev.preventDefault();
+      return;
+    }
+    // ── 표 셀 간 위/아래 방향키 네비게이션 ─────────────────────────
+    // td.md-cell 안에서 Up/Down 시 같은 column 의 인접 행으로 caret 이동.
+    // 브라우저 native 표 모델이 .md-syn(contentEditable=false) 파이프 스팬과
+    // .md-table-sep(display:none) 의 조합으로 종종 vertical navigation 을
+    // 흘려 보내는 케이스가 있어 명시 처리한다.
+    if (ev.code === 'ArrowUp' && tryTableArrowNav('up')) {
+      ev.preventDefault();
+      return;
+    }
+    if (ev.code === 'ArrowDown' && tryTableArrowNav('down')) {
       ev.preventDefault();
       return;
     }
@@ -4972,8 +5065,14 @@ function updateWindowTitle() {
   let title;
   if (!t) title = '문서 없음';
   else title = t.dirty ? `${t.title} — 편집됨` : t.title;
-  // 별도의 HTML 제목 띠는 더 이상 두지 않는다 — OS 네이티브 타이틀바
-  // (Windows/Linux) 또는 macOS Dock·메뉴바 한 곳에서만 제목을 노출한다.
+  // macOS 한정으로 표시되는 .app-titlebar 한가운데에 현재 활성 탭 제목과
+  // 편집됨 표시(`is-dirty` → CSS ::after 가 " · 편집됨" 첨부)를 갱신한다.
+  // 비-macOS 에선 같은 요소가 display:none 이라 갱신해도 무해.
+  const barEl = document.getElementById('app-titlebar-title');
+  if (barEl) {
+    barEl.textContent = t ? t.title : '문서 없음';
+    barEl.classList.toggle('is-dirty', !!(t && t.dirty));
+  }
   if (title === lastWindowTitle) return;
   lastWindowTitle = title;
   try { document.title = title; } catch (_) {}
