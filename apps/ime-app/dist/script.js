@@ -6820,6 +6820,12 @@ editor.addEventListener('contextmenu', (ev) => {
       const menu = ensureTableCtxMenu();
       menu.innerHTML = '';
       const actions = [
+        { label: '위에 행 추가', act: 'insert-row-above' },
+        { label: '아래에 행 추가', act: 'insert-row-below' },
+        { sep: true },
+        { label: '왼쪽에 열 추가', act: 'insert-col-left' },
+        { label: '오른쪽에 열 추가', act: 'insert-col-right' },
+        { sep: true },
         { label: '행 삭제', act: 'delete-row' },
         { label: '열 삭제', act: 'delete-col' },
         { sep: true },
@@ -6907,6 +6913,51 @@ async function runTableAction(act, ctx) {
         committed = committed.slice(0, s) + newLine + committed.slice(s + len);
       }
       cursor = Math.min(cursor, committed.length);
+    } else if (act === 'insert-row-above' || act === 'insert-row-below') {
+      // 헤더/구분선 위에는 본문 형태의 행을 직접 끼워 넣을 수 없다 (표 구조
+      // = "헤더 → 구분선 → 본문" 순서). 본문 행에서 우클릭 시에만 동작.
+      const isHead = ctx.tr.classList.contains('md-table-head');
+      const isSep = ctx.tr.classList.contains('md-table-sep');
+      if (isHead || isSep) {
+        logEvent('헤더/구분선 행에는 직접 행을 추가할 수 없습니다 — 본문 행에서 시도해 주세요');
+        return;
+      }
+      const numCells = ctx.tr.querySelectorAll('td.md-cell').length;
+      const newRow = '|' + '|'.repeat(numCells); // 빈 셀들 (트레일링 공백 없음)
+      const s = sourceIdxAtLineStart(ctx.tr);
+      const e = s + lineSourceLength(ctx.tr);
+      if (act === 'insert-row-above') {
+        committed = committed.slice(0, s) + newRow + '\n' + committed.slice(s);
+        cursor = s + 1; // 새 행 첫 셀 안 (| 직후의 0길이 텍스트 노드)
+      } else {
+        committed = committed.slice(0, e) + '\n' + newRow + committed.slice(e);
+        cursor = e + 1 + 1; // \n + | 직후
+      }
+    } else if (act === 'insert-col-left' || act === 'insert-col-right') {
+      // 새 열은 표의 모든 행(헤더·구분선·본문) 동일 위치에 삽입한다.
+      const targetIdx = act === 'insert-col-left' ? ctx.tdIdx : ctx.tdIdx + 1;
+      // 헤더 라벨은 새로 만들어진 컬럼 번호 기준 — 기존 N개 → "열 N+1".
+      const oldColCount = ctx.rows[0]
+        ? ctx.rows[0].querySelectorAll('td.md-cell').length
+        : 0;
+      const headerLabel = `열 ${oldColCount + 1}`;
+      // 뒤 행부터 처리 (각 행의 소스 길이가 바뀌어도 다른 행의 시작 인덱스
+      // 가 함께 밀리도록).
+      for (let i = ctx.rows.length - 1; i >= 0; i--) {
+        const row = ctx.rows[i];
+        const s = sourceIdxAtLineStart(row);
+        const len = lineSourceLength(row);
+        const lineText = committed.slice(s, s + len);
+        const isHead = row.classList.contains('md-table-head');
+        const isSep = row.classList.contains('md-table-sep');
+        let cellContent;
+        if (isHead) cellContent = ` ${headerLabel} `;
+        else if (isSep) cellContent = ' --- ';
+        else cellContent = ''; // 빈 본문 셀 (공백 없음)
+        const newLine = insertCellInLine(lineText, targetIdx, cellContent);
+        committed = committed.slice(0, s) + newLine + committed.slice(s + len);
+      }
+      cursor = Math.min(cursor, committed.length);
     }
     render();
   } catch (e) {
@@ -6926,6 +6977,36 @@ function removeNthCellFromLine(line, n) {
   const start = pipePos[n];
   const end = pipePos[n + 1];
   return leadWs + rest.slice(0, start) + rest.slice(end);
+}
+
+/* 표 라인 한 줄을 셀 단위로 분해. 표가 아니면 null. */
+function splitTableLineCells(line) {
+  const leadMatch = line.match(/^(\s*)/);
+  const leadWs = leadMatch[1];
+  const rest = line.slice(leadWs.length);
+  const pipePos = [];
+  for (let i = 0; i < rest.length; i++) if (rest[i] === '|') pipePos.push(i);
+  if (pipePos.length < 2) return null;
+  const cells = [];
+  for (let i = 0; i < pipePos.length - 1; i++) {
+    cells.push(rest.slice(pipePos[i] + 1, pipePos[i + 1]));
+  }
+  return { lead: leadWs, cells };
+}
+
+/* 분해한 셀 목록을 다시 표 라인으로 직렬화. */
+function joinTableLineCells(lead, cells) {
+  return lead + '|' + cells.join('|') + '|';
+}
+
+/* 표 라인의 N번째 위치(0-indexed) 에 새 셀을 삽입.
+   N === 0 → 맨 앞, N === cells.length → 맨 끝. */
+function insertCellInLine(line, at, content) {
+  const split = splitTableLineCells(line);
+  if (!split) return line;
+  const idx = Math.max(0, Math.min(at, split.cells.length));
+  split.cells.splice(idx, 0, content);
+  return joinTableLineCells(split.lead, split.cells);
 }
 
 // GFM 알림 (admonition): "> [!NOTE]" 꼴.
