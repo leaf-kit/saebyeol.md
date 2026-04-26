@@ -1334,20 +1334,26 @@ main.workspace-main > aside.info.empty { display: none; }
               color 220ms ease, width 200ms ease;
 }
 
-/* 사이드바 헤더 = 왼쪽 타이틀바. 탭 바와 같은 34px 높이·같은 배경으로
-   둬 상단 한 줄이 시각적으로 통일된 타이틀바처럼 보이도록 한다.
+/* 사이드바 헤더 = macOS 에서는 .app-titlebar 아래 두 번째 행, 그 외 OS
+   에서는 .tab-bar 와 함께 **최상단 행**의 왼쪽 절반. 38px 높이·같은
+   배경으로 .tab-bar 와 한 행처럼 통일된다.
    • 폴더 열기/새로고침 버튼은 각각 메뉴(⌘O) 와 자동 훅으로 대체되어
      평상시엔 숨겨지므로, 대부분의 상황에서 이 영역에는 접기 버튼만 보임.
-   • 접기 버튼을 `margin-left: auto` 로 **헤더 오른쪽 끝** 에 붙여,
-     사이드바/본문 경계와 가까운 자연스러운 위치에서 "사이드바를 안쪽으로
-     접는" 느낌을 준다. 왼쪽(traffic-light 아래) 은 비워 둔다. */
-/* 사이드바 헤더 — 상단 제목표시줄 바로 아래 행. 탭 바와 같은 38px 높이
-   로 맞춰 접기/폴더 열기/새로고침 버튼이 탭 텍스트와 세로 중앙 일치. */
+   • 세 버튼은 `.files-open { margin-left: auto }` 로 **헤더 오른쪽 끝** 에
+     모아 붙여, 사이드바/본문 경계와 가까운 자연스러운 위치에서 "사이드바를
+     안쪽으로 접는" 느낌을 준다.
+   • macOS 외 OS 에서 본 행이 최상단이 되는 경우, Window Controls Overlay
+     API 가 활성이면 env(titlebar-area-x) 로 안전 패딩이 자동 적용된다
+     (값을 노출 안 하면 8px 로 폴백). */
 .files-head {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 8px;
+  /* 좌측: env(titlebar-area-x) — Window Controls Overlay 안전 영역 시작점.
+     macOS Tauri overlay/Windows WCO 모두 활성이면 traffic-light 또는
+     min/max/X 폭만큼 자동으로 패딩이 늘어난다. */
+  padding-left: max(8px, env(titlebar-area-x, 8px));
+  padding-right: 8px;
   min-height: 38px;
   box-sizing: border-box;
   background: var(--panel);
@@ -1417,8 +1423,9 @@ main.workspace-main > aside.info.empty { display: none; }
 .files-refresh:hover { transform: rotate(180deg); }
 
 /* 접힌 사이드바 — 펼치기 버튼만 남기고 세로 띠 배경/테두리는 숨긴다.
-   traffic-light 는 위쪽 `.app-titlebar` 안에서 처리되므로, 여기서는 별도
-   예약 공간 없이 탭 바와 같은 38px 행으로 깔끔하게 정렬. */
+   traffic-light 는 .files-head 의 빈 좌측 위에 직접 overlay 되므로 (env()
+   기반 안전 패딩이 자동 적용), 여기서도 추가 예약 공간 없이 탭 바와
+   같은 38px 행으로 깔끔하게 정렬. */
 .files-pane.collapsed {
   width: auto;
   background: transparent;
@@ -1641,10 +1648,9 @@ main.workspace-main > aside.info.empty { display: none; }
   letter-spacing: 0.01em;
 }
 
-/* 상단 제목표시줄 — 탭 바/사이드바 헤더 위에 별도의 띠로 얹힌다.
-   traffic-light(빨·노·초) 가 이 띠 안에 렌더되고, 빈 영역은 창 드래그
-   타겟. 전체 화면에서도 일관된 레이아웃을 위해 **항상 표시**한다
-   (traffic-light 가 숨더라도 띠는 빈 채로 남아 아래 행 위치가 변하지 않음). */
+/* 상단 제목표시줄 — macOS 한정. html.platform-macos 일 때만 표시되고
+   Windows/Linux (html.platform-non-macos) 에선 display:none 으로 숨겨져
+   OS 네이티브 타이틀바와 이중 타이틀바가 되는 것을 피한다. */
 .app-titlebar {
   height: 40px;
   flex-shrink: 0;
@@ -1660,6 +1666,10 @@ main.workspace-main > aside.info.empty { display: none; }
   position: relative;
 }
 .app-titlebar * { -webkit-app-region: drag; }
+
+/* macOS 외 플랫폼은 띠를 완전히 제거. files-head + tab-bar 가 자동으로
+   최상단 행이 된다. */
+html.platform-non-macos .app-titlebar { display: none; }
 
 /* 현재 활성 탭의 제목을 띠 한가운데에 표시. traffic-light(왼쪽 ~82px)
    와 겹치지 않도록 좌·우 여백을 넉넉히 두고 말줄임 처리. */
@@ -1682,13 +1692,20 @@ main.workspace-main > aside.info.empty { display: none; }
 }
 
 /* ─────────── Tab bar ─────────── */
-/* 사이드바 헤더(38px) 와 동일 높이로 세로 중앙 정렬. 상단의 `.app-titlebar`
-   (40px) 아래에 배치되어 제목표시줄 + 탭 줄의 두 단 구조. */
+/* macOS 에서는 .app-titlebar(40px) 아래의 두 번째 행, 그 외 OS 에서는
+   파일 헤더와 함께 **최상단 행**(38px) 으로 사용된다. 한 행처럼 보이도록
+   .files-head 와 같은 높이·배경. */
 .tab-bar {
   display: flex;
   align-items: center;
   gap: 1px;
-  padding: 0 10px;
+  /* 우측: Window Controls Overlay 가 활성이면 min/max/X 영역만큼 자동
+     패딩 — env(titlebar-area-x) + env(titlebar-area-width) 가 안전 영역의
+     오른쪽 끝이므로, 100% - (그 끝) 만큼이 우측 OS 컨트롤 폭이다. 노출
+     안 되면 10px 로 폴백 (Windows 네이티브 타이틀바가 위에 별도로 그려져
+     overlap 자체가 없는 기본 상태). */
+  padding-left: 10px;
+  padding-right: max(10px, calc(100% - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100%)));
   background: var(--panel);
   border-bottom: 1px solid var(--border-soft);
   flex-shrink: 0;
@@ -3048,7 +3065,15 @@ html[data-theme="arctic"][data-editor-border="paper"] .editor.md-mode:focus {
   overflow: hidden;
   table-layout: fixed;
 }
-.md-table-row { background: var(--md-bg); }
+/* tr 자체는 .md-line 클래스도 함께 부여돼 있어 일반 라인 규칙
+   (`.md-line { display: block }`) 을 그대로 받으면 row 가 block 으로
+   바뀌고, 그 안의 td(display:table-cell) 들은 anonymous mini-table 로
+   감싸여 row 마다 콘텐츠 폭만 차지한다 → 헤더와 바디 컬럼 폭이 어긋나
+   바디가 좁은 셀로만 보이는 회귀가 발생. display 를 명시 복원. */
+.md-table-row {
+  display: table-row;
+  background: var(--md-bg);
+}
 .md-table-head {
   background: color-mix(in srgb, var(--md-accent-soft) 34%, var(--md-bg));
   font-weight: 700;

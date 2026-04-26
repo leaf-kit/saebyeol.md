@@ -1179,14 +1179,22 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// 제목표시줄 더블클릭 → 창 최대화 ↔ 원래 크기 토글 (macOS 기본 동작).
+// 드래그 영역(.app-titlebar, .files-head, .tab-bar) 더블클릭 → 창 최대화
+// ↔ 복원 토글. macOS 는 .app-titlebar 가 최상단 행이라 거기서 주로 동작
+// 하지만, Windows/Linux 는 .app-titlebar 가 숨겨지므로 .files-head 와
+// .tab-bar 도 동일 핸들러를 단다.
 document.addEventListener('DOMContentLoaded', () => {
-  const titlebar = document.getElementById('app-titlebar');
-  if (!titlebar) return;
-  titlebar.addEventListener('dblclick', (ev) => {
-    if (ev.target.closest('button, a, input, [contenteditable="true"]')) return;
-    invoke('toggle_window_maximize').catch(() => null);
-  });
+  const targets = [
+    document.getElementById('app-titlebar'),
+    document.querySelector('.files-pane > .files-head'),
+    document.getElementById('tab-bar'),
+  ].filter(Boolean);
+  for (const el of targets) {
+    el.addEventListener('dblclick', (ev) => {
+      if (ev.target.closest('button, a, input, [contenteditable="true"], .tab')) return;
+      invoke('toggle_window_maximize').catch(() => null);
+    });
+  }
 });
 
 /* ─────────── Style bar — persistent floating format toolbar ─────────── */
@@ -4964,13 +4972,8 @@ function updateWindowTitle() {
   let title;
   if (!t) title = '문서 없음';
   else title = t.dirty ? `${t.title} — 편집됨` : t.title;
-  // 상단 제목표시줄(HTML) 도 갱신: 제목만 본문에 넣고 편집 여부는 CSS
-  // ::after 로 " · 편집됨" 을 붙인다.
-  const barEl = document.getElementById('app-titlebar-title');
-  if (barEl) {
-    barEl.textContent = t ? t.title : '문서 없음';
-    barEl.classList.toggle('is-dirty', !!(t && t.dirty));
-  }
+  // 별도의 HTML 제목 띠는 더 이상 두지 않는다 — OS 네이티브 타이틀바
+  // (Windows/Linux) 또는 macOS Dock·메뉴바 한 곳에서만 제목을 노출한다.
   if (title === lastWindowTitle) return;
   lastWindowTitle = title;
   try { document.title = title; } catch (_) {}

@@ -4,13 +4,27 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>새별 마크다운 에디터</title>
+    <!-- 플랫폼 분기를 head 단계에서 결정해 FOUC(Flash Of Unstyled Content)
+         없이 .app-titlebar 표시/숨김을 적용한다. macOS 는 titleBarStyle:
+         Overlay 라 별도의 상단 제목표시줄 띠가 자연스럽지만, Windows/Linux
+         는 이미 OS 네이티브 타이틀바가 위에 있어 띠를 추가하면 이중 타이틀바
+         가 되는 문제를 피하기 위함. -->
+    <script>
+      (function () {
+        var ua = navigator.userAgent || '';
+        var isMac = /Mac OS X|Macintosh/.test(ua);
+        document.documentElement.classList.add(isMac ? 'platform-macos' : 'platform-non-macos');
+      })();
+    </script>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
 
-    <!-- 상단 제목표시줄 — traffic-light(빨·노·초) 버튼이 얹히는 띠 +
-         현재 활성 탭 제목 표시. 가운데 텍스트는 창 드래그에는 영향 없도록
-         `pointer-events: none` 처리되지만 요소 자체는 drag region 상속. -->
+    <!-- 상단 제목표시줄 — macOS 한정으로만 렌더된다 (head 의 platform 분기가
+         html.platform-non-macos 클래스를 붙이면 CSS 가 display:none 처리).
+         macOS 는 titleBarStyle:Overlay 로 traffic-light 가 이 띠 위에 overlay
+         되고 가운데에 활성 탭 제목을 표시한다. Windows/Linux 는 OS 네이티브
+         타이틀바가 이미 위에 그려지므로 본 띠를 숨겨 이중 타이틀바를 피한다. -->
     <div id="app-titlebar" class="app-titlebar" data-tauri-drag-region>
       <span id="app-titlebar-title" class="app-titlebar-title" aria-live="polite"></span>
     </div>
