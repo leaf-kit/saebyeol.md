@@ -3051,27 +3051,31 @@ html[data-theme="arctic"][data-editor-border="paper"] .editor.md-mode:focus {
 .md-wikilink .md-marker { font-size: 0.85em; }
 
 /* ─────────── Tables (GFM) ─────────── */
-/* 진짜 `<table>` + `<tr>` + `<td>` 로 렌더. 이유:
-   - 상/하 방향키 caret 이동이 네이티브 표 모델로 컬럼을 따라 정확히 동작
-   - Cmd+C/V 로 표 전체/부분 복사가 자연 지원
-   - 셀별 우클릭 context-menu 부착 용이 */
+/* `<table>` + `<tr>` + `<td>` 시맨틱은 유지하지만 레이아웃은 native table
+   모델 대신 flex 로 동작시킨다.
+   - 이전: 트리(.md-line 으로 인해 tr 이 display:block) 안에서 td 가
+     anonymous mini-table 로 묶여 행마다 콘텐츠 폭만 차지 → 헤더/바디
+     컬럼 폭 어긋남.
+   - display:table-row 로 강제하면 컬럼은 맞지만 contentEditable +
+     IME 라인 기반 입력 흐름과 충돌해 셀 안 타이핑이 흘러가지 못하는
+     회귀 발생.
+   - flex 는 둘 다 충족: tr 의 outer display 는 block-level (line 트래킹/
+     contentEditable 가 일반 블록처럼 다룸) + 내부는 flex 라 cells 가
+     equal-width 컬럼으로 정렬. */
 .md-table {
-  border-collapse: collapse;
+  display: block;
   width: 100%;
   margin: 8px 0;
   background: var(--md-bg);
   border: 1px solid var(--md-rule-soft);
   border-radius: 8px;
   overflow: hidden;
-  table-layout: fixed;
 }
-/* tr 자체는 .md-line 클래스도 함께 부여돼 있어 일반 라인 규칙
-   (`.md-line { display: block }`) 을 그대로 받으면 row 가 block 으로
-   바뀌고, 그 안의 td(display:table-cell) 들은 anonymous mini-table 로
-   감싸여 row 마다 콘텐츠 폭만 차지한다 → 헤더와 바디 컬럼 폭이 어긋나
-   바디가 좁은 셀로만 보이는 회귀가 발생. display 를 명시 복원. */
+/* native tbody 의 display:table-row-group 은 flex 트리에서 의미가 없어
+   contents 로 통과시켜 tr 을 .md-table 의 직접 자식 처럼 다룬다. */
+.md-table > tbody { display: contents; }
 .md-table-row {
-  display: table-row;
+  display: flex;
   background: var(--md-bg);
 }
 .md-table-head {
@@ -3079,29 +3083,33 @@ html[data-theme="arctic"][data-editor-border="paper"] .editor.md-mode:focus {
   font-weight: 700;
   color: var(--md-ink);
 }
-/* 구분선 행 — 시각적으로 숨기고 표 모델에서 제거. caret 이 이 행을
-   지날 때 방향키 탐색이 간섭하지 않도록 `display: none`. textContent
-   는 DOM 에 그대로 남아 소스 인덱스 계산엔 영향 없음. */
+/* 구분선 행 — 시각적으로 숨기고 흐름에서 제거. .md-table-row 보다 specificity
+   높아 display:flex 를 덮는다. textContent 는 DOM 에 남아 소스 인덱스
+   계산엔 영향 없음. */
 .md-table-row.md-table-sep {
   display: none;
 }
 .md-cell {
-  display: table-cell;
+  /* flex 자식 — 모든 행에서 동일한 1fr 비율을 가져 컬럼이 가지런히 정렬. */
+  flex: 1 1 0;
+  min-width: 0;
   padding: 9px 14px;
   vertical-align: top;
   overflow-wrap: break-word;
-  /* pre-wrap 으로 셀 안의 공백이 그대로 렌더되어 빈 셀에도 캐럿이 앉을
-     실질 영역이 생긴다. normal 로 두면 `"   "` 같은 소스가 0px 로 접혀
-     클릭 타겟이 사라지면서 커서 이동/선택이 불가능해진다. */
   white-space: pre-wrap;
-  border: 1px solid var(--md-rule-soft);
+  /* 인접 셀 사이 1px 만 유지 — 마지막 셀의 우측·마지막 행의 하단 경계는
+     .md-table 외곽 border 가 마감해 1px 그리드처럼 보인다. */
+  border-right: 1px solid var(--md-rule-soft);
+  border-bottom: 1px solid var(--md-rule-soft);
+  box-sizing: border-box;
 }
+.md-table-row > .md-cell:last-child { border-right: none; }
+.md-table > tbody > .md-table-row:last-child > .md-cell { border-bottom: none; }
 .md-cell[data-align="center"] { text-align: center; }
 .md-cell[data-align="right"] { text-align: right; }
 .md-pipe {
-  /* `display: table-row` 모델에서 pipe 는 anonymous cell 로 감싸져 셀
-     개수를 틀어 놓는 원인이 된다. 완전히 숨겨 레이아웃에서 제거. 텍스트
-     는 DOM 에 남아 소스 문자열 길이 계산에는 영향 없음. */
+  /* 파이프 마커는 소스 문자열 길이 계산용으로 DOM 에 남기되 시각·flex
+     레이아웃에서는 빠진다. */
   display: none;
 }
 
