@@ -3144,6 +3144,49 @@ function tryImageCaretStopDown() {
   return true;
 }
 
+// 표가 문서 맨 위/아래에 있고 그 바깥에 빈 줄이 없을 때, 사용자가 Up/Down
+// 으로 표를 빠져나가려 하면 새 빈 줄을 만들어 caret 을 그 위치로 옮긴다.
+// - 표 헤더 행에서 Up + 헤더가 첫 .md-line 이면 committed 앞에 \n 삽입,
+//   cursor=0 으로 이동 → 새 빈 줄이 표 위에 생기고 caret 안착.
+// - 표 마지막 본문 행에서 Down + 그 행이 editor 마지막 .md-line 이면
+//   committed 끝에 \n 추가, cursor=length 로 이동 → 표 아래에 빈 줄 생성.
+function tryTableEdgeEscape(direction) {
+  if (!markdownMode || preedit) return false;
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) return false;
+  const r = sel.getRangeAt(0);
+  if (!editor.contains(r.startContainer)) return false;
+  // 현재 caret 의 .md-line 조상 찾기.
+  let line = r.startContainer;
+  while (line && line !== editor) {
+    if (line.nodeType === Node.ELEMENT_NODE
+        && line.classList && line.classList.contains('md-line')) break;
+    line = line.parentNode;
+  }
+  if (!line || line === editor || !line.classList.contains('md-table-row')) return false;
+  const allLines = Array.from(editor.querySelectorAll('.md-line'));
+  if (allLines.length === 0) return false;
+  if (direction === 'up') {
+    if (!line.classList.contains('md-table-head')) return false;
+    if (allLines[0] !== line) return false;
+    snapshot();
+    committed = '\n' + committed;
+    cursor = 0;
+    render();
+    return true;
+  }
+  if (direction === 'down') {
+    if (line.classList.contains('md-table-sep')) return false;
+    if (allLines[allLines.length - 1] !== line) return false;
+    snapshot();
+    if (!committed.endsWith('\n')) committed += '\n';
+    cursor = committed.length;
+    render();
+    return true;
+  }
+  return false;
+}
+
 // 표 셀 간 위/아래 방향키 네비게이션. caret 이 td.md-cell 안에 있으면
 // 같은 column index 의 인접 행 셀로 이동하고 cursor 변수도 동기화한다.
 // 인접 행이 .md-table-sep(구분선, display:none) 이면 그 다음 행을 본다.
@@ -3985,6 +4028,19 @@ editor.addEventListener('keydown', async (ev) => {
       return;
     }
     if (ev.code === 'ArrowDown' && tryTableArrowNav('down')) {
+      ev.preventDefault();
+      return;
+    }
+    // ── 표가 문서 맨 위 (또는 맨 아래) 에 있고 그 바깥으로 caret 을 옮길
+    // 빈 줄이 없는 경우, Up/Down 으로 새 빈 줄을 만들어 그 위치로 진입.
+    // 일반 라인 사이는 브라우저 native 가 처리하지만, 표 행은
+    // contentEditable=false 의 .md-syn 파이프 + .md-table-sep 등이 끼어
+    // 있어 native 탐색이 행을 빠져나가지 못하는 케이스가 있다.
+    if (ev.code === 'ArrowUp' && tryTableEdgeEscape('up')) {
+      ev.preventDefault();
+      return;
+    }
+    if (ev.code === 'ArrowDown' && tryTableEdgeEscape('down')) {
       ev.preventDefault();
       return;
     }
