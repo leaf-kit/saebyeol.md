@@ -22,9 +22,9 @@ chmod +x 새별.AppImage && ./새별.AppImage
 
 배포판에 `webkit2gtk-4.1` 이 없으면 Ubuntu 기준 `sudo apt install libwebkit2gtk-4.1-0 libayatana-appindicator3-1`.
 
-### Windows — NSIS Setup 또는 MSI
+### Windows — NSIS Setup
 
-`saebyeol_<version>_x64-setup.exe` 를 더블클릭. MDM 배포는 `saebyeol_<version>_x64_en-US.msi`.
+`saebyeol_<version>_x64-setup.exe` 를 더블클릭으로 실행해 설치.
 
 ## 자동 업데이트
 
@@ -39,7 +39,6 @@ chmod +x 새별.AppImage && ./새별.AppImage
 | Linux x86_64 (deb) | `saebyeol_<version>_amd64.deb` |
 | Linux x86_64 (AppImage) | `saebyeol_<version>_amd64.AppImage` |
 | Windows x86_64 (NSIS) | `saebyeol_<version>_x64-setup.exe` |
-| Windows x86_64 (MSI) | `saebyeol_<version>_x64_en-US.msi` |
 
 > **첫 실행 시 OS 보안 승인 (1회만)**
 >

@@ -145,7 +145,9 @@ jobs:
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: false
-          args: --target x86_64-pc-windows-msvc
+          # NSIS 만. WiX MSI light.exe 가 productName "새별" 같은 비-ASCII
+          # 출력 파일명에서 실패하므로 MSI 는 빌드하지 않는다.
+          args: --target x86_64-pc-windows-msvc --bundles nsis
 
       - name: Rename release assets — `_*` → `saebyeol_*`
         shell: bash
@@ -156,7 +158,8 @@ jobs:
           TAG="${{ github.event.inputs.target_tag }}"
           VERSION="${TAG#v}"
           ARCH=x64
-          ASSETS=("_${VERSION}_${ARCH}-setup.exe" "_${VERSION}_${ARCH}_en-US.msi")
+          # MSI 는 빌드하지 않으므로 (--bundles nsis) NSIS setup.exe 만.
+          ASSETS=("_${VERSION}_${ARCH}-setup.exe")
           TMP=$(mktemp -d)
           for i in 1 2 3 4 5 6 7 8; do
             current=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' || true)

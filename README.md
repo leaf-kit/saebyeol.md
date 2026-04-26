@@ -90,14 +90,11 @@ chmod +x 새별.AppImage
 
 > **Linux 런타임 의존성** — `.deb` 는 apt 가 알아서 채우지만 AppImage 는 시스템에 `webkit2gtk-4.1` (Ubuntu 24.04+ 기본) 이 필요하다. Ubuntu 22.04 등에선 `sudo apt install libwebkit2gtk-4.1-0 libayatana-appindicator3-1` 이 필요할 수 있다.
 
-### Windows — NSIS Setup (권장) 또는 MSI
+### Windows — NSIS Setup
 
-[Releases](https://github.com/leaf-kit/saebyeol.md/releases/latest) 에서 받아 더블클릭으로 설치 (현재는 `x64` 만 빌드).
+[Releases](https://github.com/leaf-kit/saebyeol.md/releases/latest) 에서 `saebyeol_<version>_x64-setup.exe` 를 받아 더블클릭으로 설치 (현재는 `x64` 만 빌드).
 
-| 자산 | 용도 |
-|------|------|
-| `saebyeol_<version>_x64-setup.exe` | NSIS 설치 마법사. 일반 사용자에게 권장. |
-| `saebyeol_<version>_x64_en-US.msi` | MSI 패키지. 그룹 정책·MDM 배포 용. |
+> **MSI 미제공 안내** — WiX 빌더 `light.exe` 가 한국어 productName "새별" 의 비-ASCII MSI 출력 파일명에서 실패하는 알려진 이슈로 MSI 는 빌드하지 않는다. NSIS 인스톨러가 동일 시나리오를 모두 커버해서 사용자 영향은 없다.
 
 > **첫 실행 시 SmartScreen 경고 (1회)** — Windows 빌드는 아직 Authenticode 코드사이닝 전이라 처음 실행할 때 *"PC를 보호했습니다"* 메시지가 뜬다. **추가 정보 → 실행** 한 번이면 이후엔 더블클릭만으로 동작한다.
 
@@ -281,7 +278,7 @@ git push origin v0.1.1
 
 1. **macOS** arm64 · x86_64 / **Linux** x86_64 / **Windows** x86_64 네 매트릭스로 release 빌드.
 2. macOS 한정 — Apple Developer ID 인증서로 `.app` 코드사이닝 + Apple 노터리 서비스 등록 + staple (시크릿 등록 시).
-3. `.dmg` · `.app.tar.gz` (mac), `.deb` · `.AppImage` (Linux), `-setup.exe` · `.msi` (Windows) 자산을 GitHub Release 에 업로드.
+3. `.dmg` · `.app.tar.gz` (mac), `.deb` · `.AppImage` (Linux), `-setup.exe` (Windows NSIS) 자산을 GitHub Release 에 업로드.
 4. `Casks/saebyeol.rb` 의 버전·arch별 SHA256 을 자동 갱신해 main 에 커밋. `TAP_GITHUB_TOKEN` 시크릿이 있으면 별도 tap 저장소도 동시에 갱신.
 
 릴리스 후엔 기존 사용자가 다음 실행 시점부터 자동으로 새 버전을 안내받고, 첫 실행 Gatekeeper 경고도 사라진다.

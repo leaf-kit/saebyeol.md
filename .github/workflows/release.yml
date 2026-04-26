@@ -44,7 +44,10 @@ jobs:
             args: --target x86_64-unknown-linux-gnu
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
-            args: --target x86_64-pc-windows-msvc
+            # NSIS 만 빌드. WiX MSI 빌더(light.exe)는 productName "새별"
+            # 같은 비-ASCII 출력 파일명에서 실패하는 알려진 이슈가 있어
+            # MSI 는 의도적으로 제외한다. NSIS 는 동일 조건에서 정상 작동.
+            args: --target x86_64-pc-windows-msvc --bundles nsis
 
     runs-on: ${{ matrix.platform }}
     env:
@@ -189,7 +192,8 @@ jobs:
               ;;
             x86_64-pc-windows-msvc)
               ARCH=x64
-              ASSETS=("_${VERSION}_${ARCH}-setup.exe" "_${VERSION}_${ARCH}_en-US.msi")
+              # MSI 는 빌드하지 않으므로 (--bundles nsis) NSIS setup.exe 만.
+              ASSETS=("_${VERSION}_${ARCH}-setup.exe")
               ;;
             *)
               echo "::error::unknown matrix target ${{ matrix.target }}"
