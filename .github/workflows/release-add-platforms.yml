@@ -1,0 +1,141 @@
+# 기존 GitHub Release 에 Linux/Windows 자산을 사후로 추가할 때 사용하는
+# 워크플로. 메인 release.yml 은 태그 push 에 트리거되지만 본 워크플로는
+# workflow_dispatch 로만 동작하며, 입력으로 받은 대상 태그(예: v0.1.2)
+# 의 소스를 체크아웃해 빌드한 뒤 같은 GitHub Release 에 자산을 append
+# 한다.
+#
+# v0.1.2 처럼 macOS 만 게시된 옛 릴리스에 Linux/Windows 빌드를 사후
+# 추가하기 위해 도입했다. v0.2.0 이후의 새 릴리스는 메인 release.yml
+# 매트릭스가 처음부터 4-OS 를 모두 빌드하므로 본 워크플로가 필요 없다.
+#
+# 주의:
+# - includeUpdaterJson 은 false. 기존 latest.json (mac 엔트리만 있는
+#   상태) 을 덮어쓰면 해당 릴리스에서 자동 업데이트 안내를 받는 mac 사용자
+#   매니페스트가 깨지므로 본 잡은 의도적으로 updater 매니페스트를 갱신
+#   하지 않는다. Windows/Linux 사용자는 v0.1.2 에선 수동 다운로드만 가능.
+# - macOS 코드사이닝·노터리는 본 워크플로 범위 밖. 이미 게시된 mac dmg
+#   를 그대로 두고 Linux/Windows 자산만 append 한다.
+
+name: Release — 추가 플랫폼 빌드 (workflow_dispatch)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_tag:
+        description: '대상 태그 (예: v0.1.2). 이 태그의 소스를 체크아웃해 빌드한다.'
+        required: true
+      platforms:
+        description: '빌드할 플랫폼 (콤마 구분: linux, windows). 둘 중 하나만 또는 둘 다.'
+        required: true
+        default: 'linux,windows'
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            args: --target x86_64-unknown-linux-gnu
+            key: linux
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            args: --target x86_64-pc-windows-msvc
+            key: windows
+    runs-on: ${{ matrix.platform }}
+    # 입력 platforms 문자열에 자기 키가 포함된 잡만 실행. 예: 입력이
+    # "windows" 면 linux 잡은 건너뛰고 windows-latest 만 돈다.
+    if: contains(github.event.inputs.platforms, matrix.key)
+    steps:
+      - name: Checkout target tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.target_tag }}
+
+      - name: Install Linux build dependencies (GTK · WebKitGTK · AppIndicator)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: './apps/ime-app/src-tauri -> target'
+
+      - name: Run tests (per CLAUDE.md — 빌드 전에 테스트)
+        run: cargo test --workspace --locked
+
+      - name: Build & append to existing release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: apps/ime-app/src-tauri
+          tagName: ${{ github.event.inputs.target_tag }}
+          releaseDraft: false
+          prerelease: false
+          # 기존 latest.json (mac 엔트리만) 보존을 위해 false.
+          includeUpdaterJson: false
+          args: ${{ matrix.args }}
+
+      - name: Rename release assets — `_*` → `saebyeol_*`
+        # productName "새별" 의 ASCII-sanitize 결과로 자산명 prefix 가
+        # 비어 있는 (`_${version}_${arch}.<ext>`) 형태로 게시되므로 사용자
+        # 다운로드 이름이 깔끔하도록 saebyeol_ prefix 로 다시 업로드한다.
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.inputs.target_tag }}"
+          VERSION="${TAG#v}"
+          case "${{ matrix.target }}" in
+            x86_64-unknown-linux-gnu)
+              ARCH=amd64
+              ASSETS=("_${VERSION}_${ARCH}.deb" "_${VERSION}_${ARCH}.AppImage")
+              ;;
+            x86_64-pc-windows-msvc)
+              ARCH=x64
+              ASSETS=("_${VERSION}_${ARCH}-setup.exe" "_${VERSION}_${ARCH}_en-US.msi")
+              ;;
+            *)
+              echo "::error::unknown matrix target ${{ matrix.target }}"
+              exit 1
+              ;;
+          esac
+          TMP=$(mktemp -d)
+          # tauri-action 의 자산 업로드가 끝날 때까지 잠시 대기.
+          for i in 1 2 3 4 5 6 7 8; do
+            current=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' || true)
+            ALL_PRESENT=1
+            for OLD in "${ASSETS[@]}"; do
+              echo "$current" | grep -q "^${OLD}$" || ALL_PRESENT=0
+            done
+            [ "$ALL_PRESENT" = "1" ] && break
+            sleep 8
+          done
+          for OLD in "${ASSETS[@]}"; do
+            NEW="saebyeol${OLD}"
+            if ! gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$OLD" -D "$TMP" --clobber 2>/dev/null; then
+              echo "skip rename: $OLD (자산 없음)"
+              continue
+            fi
+            mv "$TMP/$OLD" "$TMP/$NEW"
+            gh release upload "$TAG" "$TMP/$NEW" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release delete-asset "$TAG" "$OLD" --repo "$GITHUB_REPOSITORY" --yes || true
+          done
