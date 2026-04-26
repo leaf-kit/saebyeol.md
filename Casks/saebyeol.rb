@@ -1,12 +1,12 @@
 cask "saebyeol" do
-  version "0.1.1"
+  version "0.1.2"
 
   arch arm: "aarch64", intel: "x64"
 
   # arch 별로 dmg 가 따로 빌드되므로 SHA256 도 둘로 분리한다. release CI 의
   # bump-cask-sha 잡이 새 태그마다 두 값을 모두 자동 갱신한다.
-  sha256 arm:   "7b7ec866adddd894160def196648b44a57e79c3ee3ff048014386a07f3585280",
-         intel: "b9657aaf3c739bab9b316e918d7127d77deb2d482a1bfc8cba0ffa3b2fce4fb2"
+  sha256 arm:   "6ef6e1e1e24e4073288043e0ff6c1661eb436fed5e9e86b3a02bdf0a1f8101a7",
+         intel: "d5fc6e8fab707aef2db652715cefdcae065034132da0d995440ccc08f61d3ed5"
 
   # productName "새별" 의 ASCII-sanitize 결과로 tauri 가 만든 dmg 자산은
   # `_#{version}_#{arch}.dmg` 형태로 prefix 가 비어 있지만, release 워크

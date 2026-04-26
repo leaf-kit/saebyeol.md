@@ -1966,7 +1966,7 @@ dependencies = [
 
 [[package]]
 name = "ime-demo"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "crossterm",
  "lib-ime",
@@ -2158,7 +2158,7 @@ checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 
 [[package]]
 name = "lib-ime"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "serde",
  "toml 0.8.23",
@@ -3560,7 +3560,7 @@ dependencies = [
 
 [[package]]
 name = "sb-md"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "lib-ime",
  "rfd",

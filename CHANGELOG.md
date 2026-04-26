@@ -3,6 +3,21 @@
 본 파일은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/) 형식을 따르며,
 버전은 [SemVer](https://semver.org/lang/ko/) 를 따른다. 모든 항목은 한글로 작성한다.
 
+## v0.1.2 — 2026-04-26
+
+v0.1.1 자산에 정식 Developer ID Application 서명을 적용한 핫픽스 릴리스. 기능 변경은 없다.
+
+### Apple Developer ID 코드사이닝
+- `.app` 과 `.dmg` 모두 `Developer ID Application: jinwook jeong (54B4BWWQ57)` 인증서로 서명. Hardened Runtime + Entitlements (JIT · unsigned executable memory · disable library validation) 적용.
+- 이전 v0.1.1 자산의 ad-hoc 서명을 제거하고 정식 서명으로 대체.
+- Apple notary 노터리제이션은 Apple 서버 큐 적체로 이번 릴리스에서는 보류. 첫 실행 시 macOS Gatekeeper 의 "확인되지 않은 개발자" 경고가 뜰 수 있으나, Finder 에서 `새별.app` 우클릭 → "열기" 한 번 승인으로 1회만 통과하면 이후엔 더블클릭만으로 실행된다.
+
+### Homebrew Cask
+- 새 dmg SHA256 을 메인 저장소와 `leaf-kit/homebrew-saebyeol.md` tap 양쪽에 갱신.
+- cask 주석을 정식 서명 상태에 맞게 다듬음.
+
+[v0.1.2]: https://github.com/leaf-kit/saebyeol.md/releases/tag/v0.1.2
+
 ## v0.1.1 — 2026-04-26
 
 v0.1.0 의 배포 인프라·UX 를 다듬은 패치 릴리스. 기능 변경은 없고 설치·실행 경험이 매끄러워진다.
