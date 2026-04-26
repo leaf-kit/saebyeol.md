@@ -6878,6 +6878,9 @@ editor.addEventListener('contextmenu', (ev) => {
       const menu = ensureTableCtxMenu();
       menu.innerHTML = '';
       const actions = [
+        { label: '표 복사', act: 'copy-table' },
+        { label: '표 붙여넣기', act: 'paste-table' },
+        { sep: true },
         { label: '위에 행 추가', act: 'insert-row-above' },
         { label: '아래에 행 추가', act: 'insert-row-below' },
         { sep: true },
@@ -6939,6 +6942,28 @@ window.addEventListener('blur', hideTableCtxMenu);
 
 async function runTableAction(act, ctx) {
   try {
+    // 복사·붙여넣기는 텍스트 변경(snapshot 대상) 이 아니거나 doPaste 가
+    // 자체적으로 snapshot 하므로 분기 진입 전 일괄 snapshot 을 걸지 않는다.
+    if (act === 'copy-table') {
+      await mdFlushPreedit();
+      const first = ctx.rows[0];
+      const last = ctx.rows[ctx.rows.length - 1];
+      const s = sourceIdxAtLineStart(first);
+      const e = sourceIdxAtLineStart(last) + lineSourceLength(last);
+      const tableSource = committed.slice(s, e);
+      const ok = await clipboardWrite(tableSource);
+      logEvent(ok
+        ? `표 복사됨 (${ctx.rows.length}행, ${truncate(tableSource, 40)})`
+        : '표 복사 실패 (클립보드 접근 불가)');
+      return;
+    }
+    if (act === 'paste-table') {
+      // 클립보드 텍스트를 현재 cursor 위치에 그대로 붙여 넣는다 (Cmd+V 와
+      // 동일한 doPaste 흐름). 클립보드에 마크다운 표 소스(`| ... |` 줄들) 가
+      // 들어 있으면 render() 의 표 인식 로직이 자동으로 표로 다시 렌더한다.
+      await doPaste();
+      return;
+    }
     await mdFlushPreedit();
     snapshot();
     if (act === 'delete-table') {
