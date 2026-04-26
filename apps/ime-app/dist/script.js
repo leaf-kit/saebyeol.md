@@ -2263,6 +2263,12 @@ function renderTableRow(line, aligns, rowIdx, isSep) {
       td.appendChild(document.createTextNode(content));
     } else {
       appendInline(td, content);
+      // 빈 셀에 caret 이 안착할 수 있도록 0길이 text node 를 보장.
+      // 빈 셀은 leading pipe span (+ 마지막 셀이면 trailing pipe span) 만
+      // 갖고 두 span 모두 contentEditable=false 라, 텍스트 노드가 없으면
+      // 클릭 시 caret 이 셀 밖으로 튕겨 나간다. 0길이 text node 는 소스
+      // 문자열 길이에 영향 없음 (textContent === '').
+      if (content === '') td.appendChild(document.createTextNode(''));
     }
     // 마지막 셀: 트레일링 파이프도 여기 담는다.
     if (j === numCells - 1) {
@@ -6686,9 +6692,10 @@ async function mdInsertTable(rows = 3, cols = 3) {
   snapshot();
   const header = '| ' + Array.from({ length: cols }, (_, i) => `열 ${i + 1}`).join(' | ') + ' |';
   const sep = '|' + Array.from({ length: cols }, () => ' --- ').join('|') + '|';
-  const body = Array.from({ length: Math.max(0, rows - 1) }, () => (
-    '| ' + Array.from({ length: cols }, () => ' ').join(' | ') + ' |'
-  ));
+  // body 셀은 처음부터 비워 둔다 — 셀에 미리 공백을 채워 두면, 사용자가
+  // 입력한 문자열 양옆에 트레일링/리딩 공백이 남는 회귀가 생기기 때문.
+  // 빈 셀의 caret 안착은 renderTableRow 의 0길이 text node 폴백이 책임진다.
+  const body = Array.from({ length: Math.max(0, rows - 1) }, () => '|' + '|'.repeat(cols));
   const table = [header, sep, ...body].join('\n') + '\n';
   const [ls, le] = mdCurrentLineBounds(cursor);
   const lineText = committed.slice(ls, le);
