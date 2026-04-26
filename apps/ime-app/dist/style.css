@@ -3093,6 +3093,9 @@ html[data-theme="arctic"][data-editor-border="paper"] .editor.md-mode:focus {
   /* flex 자식 — 모든 행에서 동일한 1fr 비율을 가져 컬럼이 가지런히 정렬. */
   flex: 1 1 0;
   min-width: 0;
+  /* 빈 셀도 1라인 만큼의 높이를 보장해 caret 이 cell padding 안쪽에서
+     정상 그려지고 모든 행 높이가 일관된다. */
+  min-height: 1.45em;
   padding: 9px 14px;
   vertical-align: top;
   overflow-wrap: break-word;

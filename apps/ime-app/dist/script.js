@@ -2263,12 +2263,18 @@ function renderTableRow(line, aligns, rowIdx, isSep) {
       td.appendChild(document.createTextNode(content));
     } else {
       appendInline(td, content);
-      // 빈 셀에 caret 이 안착할 수 있도록 0길이 text node 를 보장.
-      // 빈 셀은 leading pipe span (+ 마지막 셀이면 trailing pipe span) 만
-      // 갖고 두 span 모두 contentEditable=false 라, 텍스트 노드가 없으면
-      // 클릭 시 caret 이 셀 밖으로 튕겨 나간다. 0길이 text node 는 소스
-      // 문자열 길이에 영향 없음 (textContent === '').
-      if (content === '') td.appendChild(document.createTextNode(''));
+      // 빈 셀의 caret anchor — 0길이 text node 는 webkit 에서 layout 위치가
+      // 모호해 caret 이 cell padding 바깥(td 좌측 가장자리) 에 그려지는 회귀
+      // 가 있다. 0길이 text node + <br> 조합으로 대체:
+      //   • 0길이 text node 는 lineInnerAt(SHOW_TEXT walker) 가 caret 복원 시
+      //     찾을 수 있는 타깃 역할 (소스 길이 0 기여).
+      //   • <br> 은 정의된 baseline 박스를 만들어 caret 이 padding 안쪽
+      //     content-area-start 에 자연스럽게 안착하도록 보장 (textContent === '',
+      //     소스 길이 0 기여).
+      if (content === '') {
+        td.appendChild(document.createTextNode(''));
+        td.appendChild(document.createElement('br'));
+      }
     }
     // 마지막 셀: 트레일링 파이프도 여기 담는다.
     if (j === numCells - 1) {
@@ -2850,6 +2856,32 @@ function domToSourceIdx(node, offset) {
     // zero-width markers, or other inline atoms looked like "the caret
     // jumped to a different line".
     if (node === line) {
+      // 표 행(tr.md-table-row) 자체에 caret 이 떨어진 케이스 — 보통 셀
+      // 사이 경계 클릭 시 발생한다. childSourceLength 단순 합은 "이 셀의
+      // leading pipe 직전" 위치를 주는데, 그러면 사용자가 입력 시 표 행의
+      // | 보다 앞에 글자가 끼어 행 포맷이 깨진다. offset 만큼 진행한 셀의
+      // leading pipe 직후로 스냅해 글자가 셀 안에 정확히 들어가게 한다.
+      if (line.classList && line.classList.contains('md-table-row')) {
+        const tds = [];
+        for (const c of line.children) {
+          if (c.classList && c.classList.contains('md-cell')) tds.push(c);
+        }
+        let withinLine = 0;
+        const targetIdx = Math.max(0, Math.min(offset, tds.length));
+        // offset 만큼의 앞쪽 셀 텍스트 누적
+        for (let i = 0; i < targetIdx; i++) withinLine += childSourceLength(tds[i]);
+        // 마지막 셀 너머는 그대로 라인 끝, 아니면 해당 셀의 leading pipe 까지 추가.
+        if (targetIdx < tds.length) {
+          for (const child of tds[targetIdx].childNodes) {
+            withinLine += childSourceLength(child);
+            if (child.nodeType === Node.ELEMENT_NODE
+                && child.classList && child.classList.contains('md-pipe')) {
+              break;
+            }
+          }
+        }
+        return acc + withinLine;
+      }
       let inLine = 0;
       for (let i = 0; i < Math.min(offset, line.childNodes.length); i++) {
         inLine += childSourceLength(line.childNodes[i]);
