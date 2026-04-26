@@ -4759,6 +4759,28 @@ function tableSourceFromElement(table) {
   return committed.slice(firstS, lastE);
 }
 
+// 선택 중에 표가 포함됐다 싶을 때 브라우저가 sel.toString() 으로 주는
+// 탭-구분 평탄화 텍스트(예: "A\tB\tC\n1\t2\t3") 를 마크다운 표 문법으로
+// 재구성해 paste 시 다시 표로 렌더되도록 한다. 탭이 하나도 없거나 한 줄
+// 짜리면 원문 그대로 반환.
+function tabularTextToMarkdownTable(text) {
+  if (!text || !/\t/.test(text)) return text;
+  const lines = text.replace(/\r\n/g, '\n').split('\n').filter(l => l.length > 0);
+  if (lines.length === 0) return text;
+  const cellsPerLine = lines.map(l => l.split('\t'));
+  const numCols = cellsPerLine.reduce((m, cs) => Math.max(m, cs.length), 0);
+  if (numCols < 2) return text; // 한 열짜리면 표로 보지 않음
+  // 모든 행을 numCols 길이로 패딩.
+  const rows = cellsPerLine.map(cs => {
+    const padded = cs.slice();
+    while (padded.length < numCols) padded.push('');
+    return '| ' + padded.map(c => c.replaceAll('|', '\\|').trim() || ' ').join(' | ') + ' |';
+  });
+  const sep = '|' + ' --- |'.repeat(numCols);
+  if (rows.length === 1) return rows[0] + '\n' + sep;
+  return [rows[0], sep, ...rows.slice(1)].join('\n');
+}
+
 async function doCopy() {
   // Markdown 모드에서 선택이 표 한 개 안에 머물러 있으면 그 표의
   // 마크다운 소스 전체를 복사한다 (sel.toString() 은 탭-구분 cell 펼침을
@@ -4777,6 +4799,17 @@ async function doCopy() {
   if (!text) {
     logEvent('복사할 선택 영역이 없습니다');
     return false;
+  }
+  // 폴백 — selectionTable 이 표를 잡지 못한 케이스 (예: Cmd+A 로 양 끝이
+  // editor 자체) 에도, sel.toString() 결과가 탭-구분 다중 행이면 표 평탄화
+  // 결과로 보고 마크다운 표 문법으로 재구성해 paste 시 표로 다시 렌더되게 한다.
+  if (markdownMode && /\t/.test(text) && /\n/.test(text)) {
+    const restored = tabularTextToMarkdownTable(text);
+    if (restored !== text) {
+      const ok2 = await clipboardWrite(restored);
+      logEvent(ok2 ? `표 복사됨 (탭-구분 → 마크다운 ${restored.split('\n').length}줄)` : '표 복사 실패');
+      return ok2;
+    }
   }
   const ok = await clipboardWrite(text);
   logEvent(ok ? `복사됨: "${truncate(text, 30)}"` : '복사 실패');
@@ -4861,6 +4894,18 @@ editor.addEventListener('copy', (ev) => {
     const src = tableSourceFromElement(tableEl);
     if (src) {
       ev.clipboardData?.setData('text/plain', src);
+      ev.preventDefault();
+      return;
+    }
+  }
+  // \ud3f4\ubc31 \u2014 Cmd+A \ub4f1\uc73c\ub85c \uc591 \ub05d\uc774 editor \uc790\uccb4\ub77c selectionTable \uc774 null \uc774\uc5b4\ub3c4
+  // sel.toString() \uacb0\uacfc\uac00 \ud0ed-\uad6c\ubd84 \ub2e4\uc911 \ud589 (\ube0c\ub77c\uc6b0\uc800\uac00 \ud45c\ub97c \ud3c9\ud0c4\ud654\ud55c \uacb0\uacfc) \uc774\uba74
+  // \ub9c8\ud06c\ub2e4\uc6b4 \ud45c \ubb38\ubc95\uc73c\ub85c \uc7ac\uad6c\uc131\ud574 paste \uc2dc \ud45c\ub85c \ub2e4\uc2dc \ub80c\ub354\ub418\ub3c4\ub85d.
+  const rawText = sel.toString().replace(/\u200b/g, '');
+  if (markdownMode && /\t/.test(rawText) && /\n/.test(rawText)) {
+    const restored = tabularTextToMarkdownTable(rawText);
+    if (restored !== rawText) {
+      ev.clipboardData?.setData('text/plain', restored);
       ev.preventDefault();
       return;
     }
